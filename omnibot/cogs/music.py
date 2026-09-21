@@ -1,14 +1,55 @@
-"""Music — SoundCloud-first via yt-dlp / FFmpeg (no YouTube)."""
+"""Music — YouTube (and SoundCloud) via yt-dlp + FFmpeg."""
 from __future__ import annotations
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 log = logging.getLogger("omnibot.music")
+_executor = ThreadPoolExecutor(max_workers=2)
+
+YDL_OPTS = {
+    "format": "bestaudio/best",
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "ytsearch",
+    "noplaylist": True,
+    "source_address": "0.0.0.0",
+    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+}
+
+
+def _extract(query: str) -> dict:
+    import yt_dlp
+
+    with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+        info = ydl.extract_info(query, download=False)
+        if info is None:
+            raise RuntimeError("No results")
+        if "entries" in info:
+            entries = [e for e in (info.get("entries") or []) if e]
+            if not entries:
+                raise RuntimeError("No search results")
+            info = entries[0]
+        url = info.get("url") or info.get("webpage_url")
+        if not url:
+            raise RuntimeError("No stream URL")
+        # Prefer direct media url from formats if top-level url is a webpage
+        if not info.get("url") and info.get("formats"):
+            for f in reversed(info["formats"]):
+                if f.get("url") and (f.get("acodec") or "none") != "none":
+                    url = f["url"]
+                    break
+        return {
+            "title": info.get("title") or query,
+            "url": info.get("url") or url,
+            "webpage": info.get("webpage_url") or query,
+            "duration": info.get("duration"),
+        }
 
 
 class GuildPlayer:
@@ -28,17 +69,63 @@ class Music(commands.Cog):
             self.players[guild_id] = GuildPlayer()
         return self.players[guild_id]
 
-    music = app_commands.Group(name="music", description="Music controls")
+    async def _resolve(self, query: str) -> dict:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_executor, _extract, query)
 
-    @music.command(name="play", description="Play a SoundCloud track URL or search")
-    @app_commands.describe(query="SoundCloud URL or search terms")
+    def _make_source(self, stream_url: str) -> discord.AudioSource:
+        before = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+        audio = discord.FFmpegPCMAudio(stream_url, before_options=before, options="-vn")
+        return discord.PCMVolumeTransformer(audio, volume=0.85)
+
+    def _after(self, guild_id: int):
+        def _cb(err):
+            if err:
+                log.error("Player error: %s", err)
+            fut = asyncio.run_coroutine_threadsafe(self._play_next(guild_id), self.bot.loop)
+            try:
+                fut.result(timeout=5)
+            except Exception:
+                pass
+
+        return _cb
+
+    async def _play_next(self, guild_id: int):
+        gp = self._gp(guild_id)
+        if not gp.queue or not gp.voice or not gp.voice.is_connected():
+            gp.current = None
+            return
+        item = gp.queue.pop(0)
+        try:
+            # Re-resolve if needed (YouTube URLs expire)
+            if item.get("webpage") and (
+                "youtube" in str(item.get("webpage", "")).lower()
+                or "youtu.be" in str(item.get("webpage", "")).lower()
+            ):
+                try:
+                    fresh = await self._resolve(item["webpage"])
+                    item["url"] = fresh["url"]
+                    item["title"] = fresh.get("title") or item.get("title")
+                except Exception as e:
+                    log.warning("Re-resolve failed: %s", e)
+            src = self._make_source(item["url"])
+            gp.current = item
+            gp.voice.play(src, after=self._after(guild_id))
+        except Exception as e:
+            log.error("Next track failed: %s", e)
+            await self._play_next(guild_id)
+
+    music = app_commands.Group(name="music", description="Music controls (YouTube + SoundCloud)")
+
+    @music.command(name="play", description="Play from YouTube URL or search")
+    @app_commands.describe(query="YouTube URL, SoundCloud URL, or search terms")
     async def play(self, interaction: discord.Interaction, query: str):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Guild only.", ephemeral=True)
         if not interaction.user.voice or not interaction.user.voice.channel:
-            return await interaction.response.send_message("Join a voice channel first.", ephemeral=True)
-        if "youtube.com" in query.lower() or "youtu.be" in query.lower():
-            return await interaction.response.send_message("YouTube is disabled. Use SoundCloud.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Join a voice channel first.", ephemeral=True
+            )
 
         await interaction.response.defer()
         gp = self._gp(interaction.guild.id)
@@ -47,90 +134,46 @@ class Music(commands.Cog):
         try:
             if not gp.voice or not gp.voice.is_connected():
                 gp.voice = await channel.connect()
-            elif gp.voice.channel.id != channel.id:
+            elif gp.voice.channel and gp.voice.channel.id != channel.id:
                 await gp.voice.move_to(channel)
         except Exception as e:
             return await interaction.followup.send(f"Could not join voice: {e}")
 
-        # Prefer soundcloud URL; otherwise treat as search (yt-dlp scsearch)
-        source_url = query
-        title = query
-        if "soundcloud.com" not in query.lower():
-            source_url = f"scsearch1:{query}"
-
         try:
-            source = await discord.FFmpegPCMAudio.from_probe  # type: ignore
-        except Exception:
-            source = None
-
-        # Use yt-dlp extract via discord.PCMVolumeTransformer + FFmpegPCMAudio
-        try:
-            import yt_dlp
-
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "quiet": True,
-                "no_warnings": True,
-                "default_search": "scsearch",
-                "noplaylist": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(source_url, download=False)
-                if "entries" in info:
-                    info = info["entries"][0]
-                stream_url = info["url"]
-                title = info.get("title") or title
-
-            ffmpeg_opts = {
-                "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-                "options": "-vn",
-            }
-            audio = discord.FFmpegPCMAudio(stream_url, **ffmpeg_opts)
-            transformed = discord.PCMVolumeTransformer(audio, volume=0.8)
-
-            def after_play(err):
-                if err:
-                    log.error("Player error: %s", err)
-                fut = asyncio.run_coroutine_threadsafe(self._play_next(interaction.guild.id), self.bot.loop)
-                try:
-                    fut.result()
-                except Exception:
-                    pass
-
-            if gp.voice.is_playing():
-                gp.queue.append({"title": title, "url": stream_url})
-                await interaction.followup.send(f"Queued **{title}**")
-            else:
-                gp.current = {"title": title}
-                gp.voice.play(transformed, after=after_play)
-                await interaction.followup.send(f"▶️ Playing **{title}**")
+            track = await self._resolve(query.strip())
         except Exception as e:
-            log.exception("Music play failed")
-            await interaction.followup.send(
-                f"❌ Could not play audio ({e}). Install ffmpeg + `pip install yt-dlp` and try a SoundCloud URL."
+            log.exception("Resolve failed")
+            return await interaction.followup.send(
+                f"❌ Could not find that track ({e}). Try a YouTube URL or different search."
             )
 
-    async def _play_next(self, guild_id: int):
-        gp = self._gp(guild_id)
-        if not gp.queue or not gp.voice:
-            gp.current = None
+        title = track["title"]
+        entry = {
+            "title": title,
+            "url": track["url"],
+            "webpage": track.get("webpage") or query,
+        }
+
+        if gp.voice.is_playing() or gp.voice.is_paused():
+            gp.queue.append(entry)
+            await interaction.followup.send(f"Queued **{title}**")
             return
-        item = gp.queue.pop(0)
+
         try:
-            audio = discord.FFmpegPCMAudio(
-                item["url"],
-                before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-                options="-vn",
-            )
-            gp.current = item
-            gp.voice.play(discord.PCMVolumeTransformer(audio, volume=0.8))
+            src = self._make_source(entry["url"])
+            gp.current = entry
+            gp.voice.play(src, after=self._after(interaction.guild.id))
+            await interaction.followup.send(f"▶️ Playing **{title}**")
         except Exception as e:
-            log.error("Next track failed: %s", e)
+            log.exception("Play failed")
+            await interaction.followup.send(
+                f"❌ Could not play audio ({e}). Ensure **ffmpeg** is installed on the server."
+            )
 
     @music.command(name="skip", description="Skip current track")
     async def skip(self, interaction: discord.Interaction):
         gp = self._gp(interaction.guild.id)  # type: ignore
-        if gp.voice and gp.voice.is_playing():
+        if gp.voice and (gp.voice.is_playing() or gp.voice.is_paused()):
             gp.voice.stop()
             await interaction.response.send_message("Skipped.")
         else:
@@ -141,10 +184,14 @@ class Music(commands.Cog):
         gp = self._gp(interaction.guild.id)  # type: ignore
         gp.queue.clear()
         if gp.voice:
-            if gp.voice.is_playing():
+            if gp.voice.is_playing() or gp.voice.is_paused():
                 gp.voice.stop()
-            await gp.voice.disconnect()
+            try:
+                await gp.voice.disconnect()
+            except Exception:
+                pass
             gp.voice = None
+        gp.current = None
         await interaction.response.send_message("Stopped.")
 
     @music.command(name="queue", description="Show queue")
