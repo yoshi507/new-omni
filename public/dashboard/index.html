@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniBot Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #171a23;
+      --border: #2a2f3a;
+      --text: #e8eaed;
+      --muted: #9aa3b2;
+      --accent: #5865f2;
+      --accent2: #7289da;
+      --ok: #3ba55d;
+      --danger: #ed4245;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Inter, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    a { color: var(--accent2); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 28px;
+    }
+    .logo { font-weight: 800; font-size: 1.4rem; letter-spacing: -0.02em; }
+    .logo span { color: var(--accent); }
+    .btn {
+      background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+      padding: 10px 16px; font-weight: 600; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn.ghost { background: var(--panel); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px;
+    }
+    .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .muted { color: var(--muted); font-size: 0.92rem; }
+    .hero {
+      padding: 36px 24px; border-radius: 18px; border: 1px solid var(--border);
+      background: linear-gradient(145deg, #1a1f2e, #12151c); margin-bottom: 24px;
+    }
+    .hero h1 { margin: 0 0 10px; font-size: 1.8rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    input, select, textarea {
+      width: 100%; background: #0c0e14; border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 10px 12px; margin-top: 6px;
+    }
+    label { display: block; margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .switch {
+      width: 44px; height: 24px; background: #333; border-radius: 999px; position: relative; cursor: pointer;
+    }
+    .switch.on { background: var(--accent); }
+    .switch::after {
+      content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+      background: #fff; border-radius: 50%; transition: 0.15s;
+    }
+    .switch.on::after { left: 23px; }
+    .server {
+      display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px;
+      border: 1px solid var(--border); cursor: pointer; background: var(--panel);
+    }
+    .server:hover { border-color: var(--accent); }
+    .server img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #222; }
+    nav.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    nav.tabs button {
+      background: var(--panel); border: 1px solid var(--border); color: var(--text);
+      border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    }
+    nav.tabs button.active { background: var(--accent); border-color: var(--accent); }
+    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+    .hidden { display: none !important; }
+    .status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; background: #222; }
+    .status-pill.ok { background: #1e3a2a; color: #7ddea5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">Omni<span>Bot</span></div>
+      <div id="header-actions" class="actions"></div>
+    </header>
+
+    <section id="view-home" class="hero">
+      <h1>The all-in-one Discord bot</h1>
+      <p class="muted">AI, moderation, music, economy, appeals, and a full dashboard — one process, one place.</p>
+      <div class="actions">
+        <a class="btn" href="/auth/login">Open dashboard</a>
+        <a class="btn secondary" href="/auth/login?intent=appeal">Appeal a punishment</a>
+        <a class="btn secondary" href="#advertise">Advertise</a>
+        <a class="btn ghost" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank" rel="noopener">Add to Discord</a>
+      </div>
+      <p class="muted" style="margin-top:14px">Bot status: <span id="bot-status" class="status-pill">checking…</span></p>
+    </section>
+
+    <section id="view-servers" class="hidden">
+      <h2>Select a server</h2>
+      <p class="muted">Only servers you can manage where OmniBot is present are listed.</p>
+      <div id="server-list" class="grid" style="margin-top:16px"></div>
+    </section>
+
+    <section id="view-dash" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h2 id="dash-title">Server</h2>
+        <button class="btn secondary" id="btn-back">Change server</button>
+      </div>
+      <nav class="tabs" id="tabs"></nav>
+      <div id="dash-body" class="card"></div>
+    </section>
+
+    <section id="view-appeal" class="hidden">
+      <h2>Appeal a punishment</h2>
+      <p class="muted">Pick a server with appeals enabled, then submit the form.</p>
+      <input id="appeal-search" placeholder="Search servers…" />
+      <div id="appeal-servers" class="grid" style="margin-top:12px"></div>
+      <div id="appeal-form" class="card hidden" style="margin-top:16px">
+        <label>Punishment type
+          <select id="appeal-type">
+            <option value="ban">Ban</option>
+            <option value="timeout">Timeout / mute</option>
+            <option value="warn">Warn</option>
+          </select>
+        </label>
+        <label>Why should this be overturned?
+          <textarea id="appeal-reason" rows="4"></textarea>
+        </label>
+        <label>Extra context
+          <textarea id="appeal-extra" rows="2"></textarea>
+        </label>
+        <button class="btn" id="appeal-submit" style="margin-top:14px">Submit appeal</button>
+      </div>
+    </section>
+
+    <section id="view-advertise" class="hidden">
+      <h2 id="advertise">Server advertise board</h2>
+      <p class="muted">Use <code>/advertise</code> in Discord to list your server.</p>
+      <div id="ad-list" class="grid" style="margin-top:12px"></div>
+    </section>
+
+    <footer>
+      <a href="/tos">Terms of Service</a> ·
+      <a href="/privacy-policy">Privacy Policy</a> ·
+      <a href="https://discord.gg/WpdH42HShV" target="_blank" rel="noopener">Join our Discord</a>
+    </footer>
+  </div>
+
+  <script>
+    const state = { user: null, guilds: [], guildId: null, settings: {}, section: 'overview' };
+
+    async function api(path, opts = {}) {
+      const r = await fetch(path, { credentials: 'include', ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || r.statusText);
+      }
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('json')) return r.json();
+      return r.text();
+    }
+
+    function show(id) {
+      ['view-home','view-servers','view-dash','view-appeal','view-advertise'].forEach(v => {
+        document.getElementById(v).classList.toggle('hidden', v !== id);
+      });
+    }
+
+    async function refreshAuth() {
+      try {
+        const me = await api('/auth/me');
+        state.user = me.user;
+        document.getElementById('header-actions').innerHTML =
+          `<span class="muted">${me.user.username}</span> <button class="btn secondary" id="btn-logout">Log out</button>`;
+        document.getElementById('btn-logout').onclick = async () => { await api('/auth/logout', { method: 'POST' }); location.href = '/'; };
+        return true;
+      } catch {
+        state.user = null;
+        document.getElementById('header-actions').innerHTML =
+          `<a class="btn" href="/auth/login">Open dashboard</a>`;
+        return false;
+      }
+    }
+
+    async function loadServers() {
+      const data = await api('/guilds');
+      state.guilds = data.guilds || [];
+      const list = document.getElementById('server-list');
+      if (!state.guilds.length) {
+        list.innerHTML = '<p class="muted">No eligible servers. Add OmniBot and ensure you have Manage Server.</p>';
+        return;
+      }
+      list.innerHTML = state.guilds.map(g => `
+        <div class="server" data-id="${g.id}">
+          ${g.icon ? `<img src="${g.icon}" alt="">` : '<div style="width:40px;height:40px;border-radius:50%;background:#333"></div>'}
+          <div><strong>${g.name}</strong><div class="muted">${g.id}</div></div>
+        </div>`).join('');
+      list.querySelectorAll('.server').forEach(el => el.onclick = () => openGuild(el.dataset.id));
+    }
+
+    const SECTIONS = [
+      ['overview', 'Overview'],
+      ['ai', 'AI & Personality'],
+      ['moderation', 'Moderation'],
+      ['engagement', 'Chat & Engagement'],
+      ['appeals', 'Appeals'],
+      ['music', 'Music'],
+    ];
+
+    async function openGuild(id) {
+      state.guildId = id;
+      const g = state.guilds.find(x => x.id === id);
+      document.getElementById('dash-title').textContent = g ? g.name : id;
+      const tabs = document.getElementById('tabs');
+      tabs.innerHTML = SECTIONS.map(([k,l]) => `<button data-s="${k}" class="${k===state.section?'active':''}">${l}</button>`).join('');
+      tabs.querySelectorAll('button').forEach(b => b.onclick = () => { state.section = b.dataset.s; openGuild(id); });
+      const s = await api(`/guilds/${id}/settings`);
+      state.settings = s.settings || {};
+      const bot = await api(`/guilds/${id}/bot`);
+      renderSection(bot);
+      show('view-dash');
+    }
+
+    function toggle(id, on) {
+      return `<div class="switch ${on ? 'on' : ''}" data-id="${id}"></div>`;
+    }
+
+    function renderSection(bot) {
+      const body = document.getElementById('dash-body');
+      const s = state.settings;
+      if (state.section === 'overview') {
+        body.innerHTML = `
+          <p>Status: <span class="status-pill ${bot.online?'ok':''}">${bot.online?'Online':'Offline'}</span></p>
+          <p class="muted">Members: ${bot.memberCount ?? '—'}</p>
+          <p class="muted">AI usage today: ${(bot.aiUsage&&bot.aiUsage.count)||0} / ${(bot.aiUsage&&bot.aiUsage.limit)||20}</p>`;
+        return;
+      }
+      const groups = {
+        ai: ['ai.enabled','ai.memoryEnabled','ai.naturalInvocation','ai.personality','ai.commandPrefix'],
+        moderation: ['moderation.automodEnabled','moderation.antiSpamEnabled','moderation.blockedWords','security.enabled','security.mode'],
+        engagement: ['welcome.enabled','goodbye.enabled','deadchat.enabled','leveling.enabled','autorole.enabled'],
+        appeals: ['appeals.enabled','appeals.cooldownHours','appeals.acceptMessage','appeals.rejectMessage'],
+        music: ['music.enabled','music.defaultVolume'],
+      };
+      const keys = groups[state.section] || [];
+      body.innerHTML = keys.map(id => {
+        const val = s[id];
+        if (typeof val === 'boolean') {
+          return `<div class="toggle-row"><span>${id}</span>${toggle(id, val)}</div>`;
+        }
+        if (id === 'ai.personality' || String(id).includes('Message')) {
+          return `<label>${id}<textarea data-id="${id}" rows="4">${val ?? ''}</textarea></label>`;
+        }
+        return `<label>${id}<input data-id="${id}" value="${val ?? ''}" /></label>`;
+      }).join('') + `<button class="btn" id="save" style="margin-top:16px">Save changes</button>`;
+
+      body.querySelectorAll('.switch').forEach(el => {
+        el.onclick = () => el.classList.toggle('on');
+      });
+      document.getElementById('save').onclick = saveSettings;
+    }
+
+    async function saveSettings() {
+      const patch = {};
+      document.querySelectorAll('#dash-body [data-id]').forEach(el => {
+        const id = el.dataset.id;
+        if (el.classList.contains('switch')) patch[id] = el.classList.contains('on');
+        else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          const v = el.value;
+          patch[id] = v === 'true' ? true : v === 'false' ? false : (isFinite(v) && v !== '' && !id.includes('Message') && !id.includes('personality') && !id.includes('Prefix') && !id.includes('Words') ? Number(v) : v);
+        }
+      });
+      await api(`/guilds/${state.guildId}/settings`, { method: 'PUT', body: JSON.stringify({ patch }) });
+      alert('Saved');
+      openGuild(state.guildId);
+    }
+
+    async function loadAppeals() {
+      const data = await api('/appeals/servers');
+      const box = document.getElementById('appeal-servers');
+      state.appealServers = data.servers || [];
+      const render = (q='') => {
+        const list = state.appealServers.filter(s => s.name.toLowerCase().includes(q.toLowerCase()));
+        box.innerHTML = list.map(s => `
+          <div class="server" data-id="${s.id}">
+            ${s.icon ? `<img src="${s.icon}">` : '<div style="width:40px;height:40px;border-radius:50%;background:#333"></div>'}
+            <strong>${s.name}</strong>
+          </div>`).join('') || '<p class="muted">No servers with appeals enabled.</p>';
+        box.querySelectorAll('.server').forEach(el => el.onclick = () => {
+          state.appealGuild = el.dataset.id;
+          document.getElementById('appeal-form').classList.remove('hidden');
+        });
+      };
+      render();
+      document.getElementById('appeal-search').oninput = e => render(e.target.value);
+      document.getElementById('appeal-submit').onclick = async () => {
+        if (!state.user) return location.href = '/auth/login';
+        await api('/appeals/submit', {
+          method: 'POST',
+          body: JSON.stringify({
+            guild_id: state.appealGuild,
+            punishment_type: document.getElementById('appeal-type').value,
+            reason: document.getElementById('appeal-reason').value,
+            extra: document.getElementById('appeal-extra').value,
+          })
+        });
+        alert('Appeal submitted');
+      };
+    }
+
+    async function loadAds() {
+      const data = await api('/advertise/list');
+      document.getElementById('ad-list').innerHTML = (data.servers||[]).map(s => `
+        <div class="card"><h3>${s.name}</h3><p class="muted">${s.category||''}</p><p>${s.description||''}</p>
+        ${s.invite ? `<a class="btn" href="${s.invite}" target="_blank">Join</a>` : ''}</div>`).join('') || '<p class="muted">No listings yet.</p>';
+    }
+
+    document.getElementById('btn-back').onclick = () => { show('view-servers'); loadServers(); };
+
+    (async function init() {
+      try {
+        const h = await api('/health');
+        const el = document.getElementById('bot-status');
+        el.textContent = h.discordReady ? 'Online' : 'API up · Discord connecting';
+        el.classList.toggle('ok', !!h.discordReady);
+      } catch { document.getElementById('bot-status').textContent = 'Unreachable'; }
+
+      const authed = await refreshAuth();
+      const hash = location.hash || '';
+      if (hash.includes('appeal')) {
+        if (!authed) location.href = '/auth/login';
+        else { show('view-appeal'); loadAppeals(); }
+      } else if (hash.includes('advertise')) {
+        show('view-advertise'); loadAds();
+      } else if (authed) {
+        show('view-servers'); loadServers();
+      } else {
+        show('view-home');
+      }
+
+      document.querySelectorAll('a[href="#advertise"]').forEach(a => a.onclick = (e) => {
+        e.preventDefault(); show('view-advertise'); loadAds();
+      });
+    })();
+  </script>
+</body>
+</html>

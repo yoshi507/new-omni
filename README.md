@@ -1,48 +1,57 @@
 # OmniBot (Python) — `new-omni`
 
-Full rebuild of OmniBot: **Discord bot + web dashboard + REST API in one Python process**.
+**Complete rebuild** of OmniBot: Discord bot + web dashboard + REST API in **one Python process**.
 
-## Features (parity with Node OmniBot)
+Repository: https://github.com/yoshi507/new-omni
 
-- Slash + prefix + natural `omni` / nickname invocation
-- AI chat, summarise, moderate, security, persona (20 AI requests/guild/day)
-- Image generation via Home Mode API
-- Economy & games (coins, daily, shop, slots, rps, dice, trivia, …)
-- Moderation, automod, anti-spam, anti-nuke (safe monitor/alert/lockdown)
-- Welcome / goodbye / autorole / leveling / logging
-- Appeals, quizzes, giveaways, reaction roles, tickets
-- Dead Chat Reviver, partnerships, affiliate, server advertise
-- Music (SoundCloud-first; Spotify metadata optional)
-- Captcha verification, userphone, automations, swear jar, forum AI help
-- Dashboard with Discord OAuth, per-guild settings, appeals portal
+## Feature parity
 
-## Quick start
+| Area | Included |
+|------|----------|
+| Slash + prefix + `omni` / nickname natural AI | Yes |
+| AI chat, summary, moderate, security, imagine | Yes (20/guild/day) |
+| Per-server personality | Yes |
+| Economy & games | Yes |
+| Moderation + automod + anti-spam | Yes |
+| Anti-nuke monitor/alert | Yes |
+| Welcome / goodbye / autorole / leveling | Yes |
+| Dead Chat settings | Yes |
+| Appeals (Discord + website) | Yes |
+| Giveaways, reaction roles, quiz | Yes |
+| Advertise board, partner, affiliate | Yes |
+| Music (SoundCloud-first, no YouTube) | Yes |
+| Captcha toggle, userphone | Yes |
+| Translate (non-AI) | Yes |
+| Dashboard OAuth + settings toggles | Yes |
+| ToS / Privacy routes | Yes |
+
+## Run
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # fill in secrets
+cp .env.example .env   # fill secrets
 python main.py
 ```
 
-Open `http://HOST:PORT/` for the dashboard. Health: `/health`  Version: `/version`
+- Dashboard: `http://HOST:PORT/`
+- Health: `/health`
+- Version: `/version`
+
+System packages: **ffmpeg** recommended for music.
 
 ## Environment variables
 
-See `.env.example` and the **Environment variables** section at the bottom of this README after deploy notes.
+See `.env.example`. Full list is in the response / docs below after deploy.
 
-## Architecture
+## Discord Developer Portal
 
-```
-main.py                 # starts FastAPI (uvicorn) + discord.py bot together
-omnibot/
-  config.py             # env loading
-  storage.py            # per-guild JSON storage
-  bot.py                # discord client + cog loader
-  cogs/                 # feature modules (commands + events)
-  services/             # AI, music, economy, security helpers
-  web/                  # FastAPI app, OAuth, settings API
-public/dashboard/       # static dashboard UI
-data/                   # runtime guild data (not committed)
-```
+1. Redirect URL: `{PUBLIC_BASE_URL}/auth/discord/callback`
+2. Scopes: `identify`, `guilds`
+3. Bot intents: Message Content, Server Members, presence optional
+
+## Wispbyte
+
+Start command: `python main.py`  
+Set `PORT` (injected) and all env vars from `.env.example`.
