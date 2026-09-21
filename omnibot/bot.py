@@ -18,6 +18,7 @@ INTENTS.message_content = True
 INTENTS.members = True
 INTENTS.guilds = True
 INTENTS.moderation = True
+INTENTS.reactions = True
 
 
 def _prefix(bot: commands.Bot, message: discord.Message):
@@ -36,7 +37,7 @@ class OmniBot(commands.Bot):
             help_command=None,
             case_insensitive=True,
         )
-        self.deploy_marker = "2026-09-21-python-rebuild-v1"
+        self.deploy_marker = "2026-09-21-python-rebuild-v2"
 
     async def setup_hook(self) -> None:
         cogs_dir = Path(__file__).parent / "cogs"

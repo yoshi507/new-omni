@@ -1,33 +1,18 @@
 """Core utility commands."""
 from __future__ import annotations
 
-import time
-
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from omnibot.config import settings
-from omnibot.services import ai_limits
 
 
 class General(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="ping", description="Check bot latency")
-    async def ping(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            f"Pong! `{round(self.bot.latency * 1000)}ms`",
-            ephemeral=True,
-        )
-
-    @commands.command(name="ping")
-    async def ping_prefix(self, ctx: commands.Context):
-        await ctx.reply(f"Pong! `{round(self.bot.latency * 1000)}ms`", mention_author=False)
-
-    @app_commands.command(name="help", description="Show OmniBot commands and features")
-    async def help_cmd(self, interaction: discord.Interaction):
+    def _help_embed(self) -> discord.Embed:
         limit = settings.ai_daily_limit
         embed = discord.Embed(
             title="🤖 OmniBot Help",
@@ -50,7 +35,7 @@ class General(commands.Cog):
         )
         embed.add_field(
             name="🎵 Music",
-            value="`/music play|skip|stop|queue|pause|resume|volume`",
+            value="`/music play|skip|stop|queue|pause|resume`",
             inline=False,
         )
         embed.add_field(
@@ -65,15 +50,29 @@ class General(commands.Cog):
         )
         embed.add_field(
             name="🎫 Appeals & more",
-            value="`/appeal` `/appealsetup` `/quiz` `/advertise` `/partner` `/captcha` `/userphone`",
+            value="`/appeal` `/advertise` `/partner` `/captcha` `/userphone` `/quiz` `/translate`",
             inline=False,
         )
         embed.set_footer(text="Prefix + natural commands · AI limit resets daily")
-        await interaction.response.send_message(embeds=[embed])
+        return embed
+
+    @app_commands.command(name="ping", description="Check bot latency")
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            f"Pong! `{round(self.bot.latency * 1000)}ms`", ephemeral=True
+        )
+
+    @commands.command(name="ping")
+    async def ping_prefix(self, ctx: commands.Context):
+        await ctx.reply(f"Pong! `{round(self.bot.latency * 1000)}ms`", mention_author=False)
+
+    @app_commands.command(name="help", description="Show OmniBot commands and features")
+    async def help_cmd(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embeds=[self._help_embed()])
 
     @commands.command(name="help")
     async def help_prefix(self, ctx: commands.Context):
-        await ctx.invoke(self.help_cmd)  # type: ignore
+        await ctx.reply(embeds=[self._help_embed()], mention_author=False)
 
     @app_commands.command(name="dashboard", description="Open the OmniBot dashboard")
     async def dashboard(self, interaction: discord.Interaction):
@@ -105,7 +104,6 @@ class General(commands.Cog):
         await interaction.response.send_message(embeds=[embed])
 
     @app_commands.command(name="userinfo", description="User information")
-    @app_commands.describe(user="User to inspect")
     async def userinfo(self, interaction: discord.Interaction, user: discord.Member | None = None):
         user = user or interaction.user  # type: ignore
         embed = discord.Embed(title=str(user), color=0x5865F2)

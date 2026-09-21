@@ -3,11 +3,10 @@
 venv/
 __pycache__/
 *.py[cod]
-*.egg-info/
 .pytest_cache/
 .mypy_cache/
 data/
 *.log
 .DS_Store
-.omnibot-disk-probe
 npm-debug.log*
+node_modules/
