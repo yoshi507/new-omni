@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("omnibot")
 
-DEPLOY_MARKER = "2026-09-21-python-rebuild-v2"
+DEPLOY_MARKER = "2026-09-21-python-ai-music-dash-v3"
 
 
 async def run() -> None:
@@ -41,7 +41,7 @@ async def run() -> None:
 
     log.info("[Startup] deployMarker=%s", DEPLOY_MARKER)
     log.info("[Startup] PORT=%s PUBLIC_BASE_URL=%s", settings.port, settings.public_base_url)
-    log.info("[Startup] groq=%s", "ready" if settings.groq_api_key else "not-configured")
+    log.info("[Startup] groq=%s model=%s", "ready" if settings.groq_api_key else "not-configured", settings.groq_model)
     log.info("[Startup] image=%s", "ready" if settings.home_mode_api_url else "not-configured")
 
     async def start_bot() -> None:

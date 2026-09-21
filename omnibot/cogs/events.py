@@ -12,7 +12,7 @@ from discord.ext import commands
 from omnibot import storage
 from omnibot.services import groq_client
 
-NATURAL = re.compile(r"^(?:omni(?:bot)?|@?omnibot)\s+(.+)$", re.I)
+NATURAL = re.compile(r"^(?:omni(?:bot)?)(?:\s+|[,:]\s*)(.+)$", re.I)
 
 
 class Events(commands.Cog):
@@ -24,7 +24,6 @@ class Events(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         data = storage.load_guild(member.guild.id)
-        # autorole
         ar = data.get("autorole") or {}
         if ar.get("enabled") and ar.get("roleId"):
             role = member.guild.get_role(int(ar["roleId"]))
@@ -33,14 +32,16 @@ class Events(commands.Cog):
                     await member.add_roles(role, reason="OmniBot autorole")
                 except Exception:
                     pass
-        # welcome
         ws = data.get("welcomeSettings") or {}
         if ws.get("enabled") and ws.get("channelId"):
             ch = member.guild.get_channel(int(ws["channelId"]))
             if isinstance(ch, discord.TextChannel):
-                msg = (ws.get("message") or "Welcome {user}!").replace(
-                    "{user}", member.mention
-                ).replace("{server}", member.guild.name).replace("{username}", member.name)
+                msg = (
+                    (ws.get("message") or "Welcome {user}!")
+                    .replace("{user}", member.mention)
+                    .replace("{server}", member.guild.name)
+                    .replace("{username}", member.name)
+                )
                 try:
                     await ch.send(msg)
                 except Exception:
@@ -53,9 +54,12 @@ class Events(commands.Cog):
         if gs.get("enabled") and gs.get("channelId"):
             ch = member.guild.get_channel(int(gs["channelId"]))
             if isinstance(ch, discord.TextChannel):
-                msg = (gs.get("message") or "{username} left.").replace(
-                    "{username}", member.name
-                ).replace("{server}", member.guild.name).replace("{user}", member.name)
+                msg = (
+                    (gs.get("message") or "{username} left.")
+                    .replace("{username}", member.name)
+                    .replace("{server}", member.guild.name)
+                    .replace("{user}", member.name)
+                )
                 try:
                     await ch.send(msg)
                 except Exception:
@@ -68,9 +72,9 @@ class Events(commands.Cog):
 
         data = storage.load_guild(message.guild.id)
 
-        # deadchat activity stamp
         dc = data.get("deadChat") or {}
         if dc.get("enabled"):
+
             def mut_dc(d):
                 d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[
                     str(message.channel.id)
@@ -78,7 +82,6 @@ class Events(commands.Cog):
 
             storage.update_guild(message.guild.id, mut_dc)
 
-        # automod words
         am = data.get("automod") or {}
         if am.get("enabled") and am.get("blockedWords") and message.content:
             words = [w.strip().lower() for w in str(am["blockedWords"]).split(",") if w.strip()]
@@ -94,16 +97,13 @@ class Events(commands.Cog):
                     pass
                 return
 
-        # anti-spam
         spam = data.get("spamConfig") or {}
         if spam.get("enabled", True):
             key = f"{message.guild.id}:{message.author.id}"
             now = time.time()
-            bucket = self._spam[key]
-            # ensure list
+            bucket = self._spam.get(key) or []
             if not isinstance(bucket, list):
                 bucket = []
-                self._spam[key] = bucket
             bucket.append(now)
             self._spam[key] = [t for t in bucket if now - t < 7]
             if len(self._spam[key]) >= 7:
@@ -116,7 +116,6 @@ class Events(commands.Cog):
                     pass
                 self._spam[key] = []
 
-        # leveling
         ls = data.get("levelSettings") or {}
         if ls.get("enabled", True) and message.content:
             cd_key = f"{message.guild.id}:{message.author.id}"
@@ -127,7 +126,9 @@ class Events(commands.Cog):
                 gain = random.randint(min(xmin, xmax), max(xmin, xmax))
 
                 def mut_xp(d):
-                    lv = d.setdefault("levels", {}).setdefault(str(message.author.id), {"xp": 0, "level": 0})
+                    lv = d.setdefault("levels", {}).setdefault(
+                        str(message.author.id), {"xp": 0, "level": 0}
+                    )
                     lv["xp"] = int(lv.get("xp") or 0) + gain
                     need = 100 + int(lv.get("level") or 0) * 50
                     if lv["xp"] >= need:
@@ -144,33 +145,34 @@ class Events(commands.Cog):
                     except Exception:
                         pass
 
-        # natural invocation: omni … / nickname
         if not message.content:
             return
         content = message.content.strip()
+        prompt = None
         m = NATURAL.match(content)
-        nick_hit = False
-        me = message.guild.me
-        if me and me.nick:
-            nick = me.nick.strip()
-            if nick and content.lower().startswith(nick.lower() + " "):
-                rest = content[len(nick) :].strip()
-                if rest:
-                    m = type("M", (), {"group": lambda self, i: rest})()
-                    nick_hit = True
+        if m:
+            prompt = m.group(1).strip()
+        else:
+            me = message.guild.me
+            if me and me.nick:
+                nick = me.nick.strip()
+                low = content.lower()
+                nlow = nick.lower()
+                if low.startswith(nlow + " ") or low.startswith(nlow + ",") or low.startswith(nlow + ":"):
+                    prompt = content[len(nick) :].lstrip(" ,:").strip()
 
         dash = data.get("dashboard") or {}
         ai_cfg = dash.get("ai") or {}
-        if m and ai_cfg.get("naturalInvocation", True) and ai_cfg.get("enabled", True):
-            prompt = m.group(1) if not nick_hit else m.group(1)
-            # skip if looks like a known command word handled by prefix
+        if prompt and ai_cfg.get("naturalInvocation", True) and ai_cfg.get("enabled", True):
             first = prompt.split()[0].lower() if prompt.split() else ""
-            if first in {"help", "ping", "balance", "daily", "play", "skip"}:
+            if first in {"help", "ping", "balance", "daily", "play", "skip", "stop"}:
                 return
             async with message.channel.typing():
                 ok, text = await groq_client.chat(message.guild.id, prompt)
             try:
-                await message.reply(f"❌ {text}" if not ok else text[:1900], mention_author=False)
+                await message.reply(
+                    f"❌ {text}" if not ok else text[:1900], mention_author=False
+                )
             except Exception:
                 pass
 
