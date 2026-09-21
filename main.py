@@ -1,9 +1,8 @@
 """OmniBot entrypoint — Discord bot + dashboard API on one process."""
-from __future__ as annotations
+from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 
 import uvicorn
@@ -19,7 +18,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("omnibot")
 
-DEPLOY_MARKER = "2026-09-21-python-rebuild-v1"
+DEPLOY_MARKER = "2026-09-21-python-rebuild-v2"
 
 
 async def run() -> None:
@@ -28,6 +27,7 @@ async def run() -> None:
         sys.exit(1)
 
     bot = OmniBot()
+    bot.deploy_marker = DEPLOY_MARKER
     app = create_app(bot=bot, deploy_marker=DEPLOY_MARKER)
 
     config = uvicorn.Config(
@@ -42,6 +42,7 @@ async def run() -> None:
     log.info("[Startup] deployMarker=%s", DEPLOY_MARKER)
     log.info("[Startup] PORT=%s PUBLIC_BASE_URL=%s", settings.port, settings.public_base_url)
     log.info("[Startup] groq=%s", "ready" if settings.groq_api_key else "not-configured")
+    log.info("[Startup] image=%s", "ready" if settings.home_mode_api_url else "not-configured")
 
     async def start_bot() -> None:
         async with bot:
