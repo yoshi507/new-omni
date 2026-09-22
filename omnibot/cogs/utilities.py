@@ -30,7 +30,7 @@ class Utilities(commands.Cog):
         if not set(expression) <= allowed:
             return await interaction.response.send_message("Only numbers and + - * / ( ) allowed.", ephemeral=True)
         try:
-            result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
+            result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307 — restricted
             await interaction.response.send_message(f"`{expression}` = **{result}**")
         except Exception:
             await interaction.response.send_message("Could not evaluate.", ephemeral=True)

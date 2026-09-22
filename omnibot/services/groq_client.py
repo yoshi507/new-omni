@@ -18,6 +18,7 @@ DEFAULT_SYSTEM = (
     "Do not claim to be human. Do not invent moderation actions."
 )
 
+# Try configured model first, then known-working Groq models
 FALLBACK_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
@@ -32,6 +33,7 @@ def _persona_system(guild_id: int | str | None) -> str:
     if not guild_id:
         return base
     data = storage.load_guild(guild_id)
+    # Respect dashboard AI enable toggle
     dash = data.get("dashboard") or {}
     ai_cfg = dash.get("ai") or {}
     if ai_cfg.get("enabled") is False:
@@ -65,6 +67,7 @@ async def chat(
     history: list[dict[str, str]] | None = None,
     consume_quota: bool = True,
 ) -> tuple[bool, str]:
+    """Returns (ok, text). On limit/config errors, ok=False with friendly message."""
     key = (settings.groq_api_key or "").strip().strip('"').strip("'")
     if not key:
         return False, (
@@ -126,6 +129,7 @@ async def chat(
                 if r.status_code >= 400:
                     body = r.text[:400]
                     log.error("Groq error model=%s status=%s body=%s", model, r.status_code, body)
+                    # Model unavailable → try next
                     if r.status_code in (400, 404) and (
                         "model" in body.lower() or "not found" in body.lower()
                     ):

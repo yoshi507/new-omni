@@ -4,16 +4,19 @@ from __future__ import annotations
 from typing import Any
 
 SETTINGS: list[dict[str, Any]] = [
+    # AI
     {"id": "ai.enabled", "path": "dashboard.ai.enabled", "type": "bool", "default": True, "category": "ai"},
     {"id": "ai.naturalInvocation", "path": "dashboard.ai.naturalInvocation", "type": "bool", "default": True, "category": "ai"},
     {"id": "ai.memoryEnabled", "path": "dashboard.ai.memoryEnabled", "type": "bool", "default": True, "category": "ai"},
     {"id": "ai.commandPrefix", "path": "commandSettings.prefix", "type": "text", "default": "!", "category": "ai"},
     {"id": "ai.personality", "path": "persona.instructions", "type": "textarea", "default": "", "category": "ai"},
+    # Moderation
     {"id": "moderation.automodEnabled", "path": "automod.enabled", "type": "bool", "default": False, "category": "moderation"},
     {"id": "moderation.antiSpamEnabled", "path": "spamConfig.enabled", "type": "bool", "default": True, "category": "moderation"},
     {"id": "moderation.blockedWords", "path": "automod.blockedWords", "type": "textarea", "default": "", "category": "moderation"},
     {"id": "security.enabled", "path": "security.enabled", "type": "bool", "default": True, "category": "moderation"},
     {"id": "security.mode", "path": "security.mode", "type": "select", "default": "monitor", "options": ["monitor", "alert", "lockdown"], "category": "moderation"},
+    # Engagement
     {"id": "welcome.enabled", "path": "welcomeSettings.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "welcome.message", "path": "welcomeSettings.message", "type": "textarea", "default": "Welcome {user}!", "category": "engagement"},
     {"id": "goodbye.enabled", "path": "goodbyeSettings.enabled", "type": "bool", "default": False, "category": "engagement"},
@@ -21,17 +24,24 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "deadchat.minutes", "path": "deadChat.minutes", "type": "number", "default": 60, "category": "engagement"},
     {"id": "leveling.enabled", "path": "levelSettings.enabled", "type": "bool", "default": True, "category": "engagement"},
     {"id": "autorole.enabled", "path": "autorole.enabled", "type": "bool", "default": False, "category": "engagement"},
+    # Appeals
     {"id": "appeals.enabled", "path": "appeals.enabled", "type": "bool", "default": False, "category": "appeals"},
     {"id": "appeals.cooldownHours", "path": "appeals.cooldownHours", "type": "number", "default": 24, "category": "appeals"},
     {"id": "appeals.acceptMessage", "path": "appeals.acceptMessage", "type": "textarea", "default": "Your appeal was accepted.", "category": "appeals"},
     {"id": "appeals.rejectMessage", "path": "appeals.rejectMessage", "type": "textarea", "default": "Your appeal was rejected.", "category": "appeals"},
+    # Music
     {"id": "music.enabled", "path": "music.enabled", "type": "bool", "default": True, "category": "music"},
     {"id": "music.defaultVolume", "path": "music.defaultVolume", "type": "number", "default": 80, "category": "music"},
+    # Logging
     {"id": "logging.enabled", "path": "logging.enabled", "type": "bool", "default": True, "category": "logging"},
     {"id": "logging.voice", "path": "logging.voice", "type": "bool", "default": False, "category": "logging"},
+    # Tickets
     {"id": "tickets.enabled", "path": "tickets.enabled", "type": "bool", "default": False, "category": "tickets"},
+    # Suggestions
     {"id": "suggestions.enabled", "path": "suggestions.enabled", "type": "bool", "default": False, "category": "engagement"},
+    # Economy
     {"id": "economy.enabled", "path": "economy.enabled", "type": "bool", "default": True, "category": "fun"},
+    # Temp voice
     {"id": "tempVoice.enabled", "path": "tempVoice.enabled", "type": "bool", "default": False, "category": "voice"},
 ]
 
