@@ -106,15 +106,12 @@ class VoiceExtra(commands.Cog):
             return await interaction.response.send_message("Guild only.", ephemeral=True)
         gid = interaction.guild.id
 
-        if not await concurrency.try_acquire(gid, timeout=0.1):
-            return await interaction.response.send_message(
-                "⏳ This server is already handling 4 tasks. Try again in a moment.",
-                ephemeral=True,
-            )
-
         await interaction.response.defer()
         audio_path: Path | None = None
-        try:
+        done = asyncio.Event()
+        vc = None
+        # Hold global/guild slots only while generating (not during long playback)
+        async with concurrency.guild_slot(gid):
             ok_lim, lim_msg = ai_limits.can_use(gid)
             if not ok_lim:
                 return await interaction.followup.send(f"❌ {lim_msg}")
@@ -146,8 +143,18 @@ class VoiceExtra(commands.Cog):
             try:
                 vc = await self._ensure_vc(interaction)
             except Exception as e:
+                if audio_path:
+                    try:
+                        audio_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
                 return await interaction.followup.send(f"❌ Could not join voice: {e}")
             if not vc:
+                if audio_path:
+                    try:
+                        audio_path.unlink(missing_ok=True)
+                    except Exception:
+                        pass
                 return await interaction.followup.send("Join a voice channel first.")
 
             if vc.is_playing() or vc.is_paused():
@@ -155,12 +162,16 @@ class VoiceExtra(commands.Cog):
                 await asyncio.sleep(0.3)
 
             source = discord.FFmpegPCMAudio(str(audio_path), options="-vn")
-            done = asyncio.Event()
 
             def _after(err):
                 if err:
                     log.error("TTS play error: %s", err)
                 self.bot.loop.call_soon_threadsafe(done.set)
+                try:
+                    if audio_path:
+                        audio_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
             vc.play(source, after=_after)
             ai_limits.consume(gid)
@@ -169,18 +180,13 @@ class VoiceExtra(commands.Cog):
             await interaction.followup.send(
                 f"🔊 **Speaking** ({voice_label}) · AI {u['count']}/{u['limit']}\n> {preview}"
             )
-            try:
-                await asyncio.wait_for(done.wait(), timeout=120)
-            except asyncio.TimeoutError:
-                if vc.is_playing():
-                    vc.stop()
-        finally:
-            concurrency.release(gid)
-            if audio_path:
-                try:
-                    audio_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+
+        # Playback continues without holding the global pool
+        try:
+            await asyncio.wait_for(done.wait(), timeout=120)
+        except asyncio.TimeoutError:
+            if vc and vc.is_playing():
+                vc.stop()
 
     @voice.command(name="voiceinfo", description="Show which TTS voice matches the server AI personality")
     async def voiceinfo(self, interaction: discord.Interaction):
