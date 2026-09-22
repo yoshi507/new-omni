@@ -8,7 +8,7 @@ import httpx
 
 from omnibot.config import settings
 from omnibot import storage
-from omnibot.services import ai_limits
+from omnibot.services import ai_limits, concurrency
 
 log = logging.getLogger("omnibot.groq")
 
@@ -18,7 +18,6 @@ DEFAULT_SYSTEM = (
     "Do not claim to be human. Do not invent moderation actions."
 )
 
-# Try configured model first, then known-working Groq models
 FALLBACK_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
@@ -33,7 +32,6 @@ def _persona_system(guild_id: int | str | None) -> str:
     if not guild_id:
         return base
     data = storage.load_guild(guild_id)
-    # Respect dashboard AI enable toggle
     dash = data.get("dashboard") or {}
     ai_cfg = dash.get("ai") or {}
     if ai_cfg.get("enabled") is False:
@@ -91,78 +89,78 @@ async def chat(
     last_err = "Something went wrong with AI. Please try again."
 
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            for model in _models_to_try():
-                try:
-                    r = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": model,
-                            "messages": messages,
-                            "temperature": 0.7,
-                            "max_tokens": 1024,
-                        },
-                    )
-                except httpx.TimeoutException:
-                    last_err = "The AI service timed out. Try again in a moment."
-                    continue
-                except httpx.RequestError as e:
-                    log.error("Groq network error: %s", e)
-                    last_err = "Could not reach Groq. Check the server network connection."
-                    continue
-
-                if r.status_code == 401:
-                    log.error("Groq 401 — invalid API key")
-                    return False, (
-                        "AI authentication failed. Check that **GROQ_API_KEY** is valid "
-                        "in the server environment and restart."
-                    )
-                if r.status_code == 429:
-                    return False, (
-                        "Sorry — the global AI provider limit was reached. "
-                        "Wait a minute and try again."
-                    )
-                if r.status_code >= 400:
-                    body = r.text[:400]
-                    log.error("Groq error model=%s status=%s body=%s", model, r.status_code, body)
-                    # Model unavailable → try next
-                    if r.status_code in (400, 404) and (
-                        "model" in body.lower() or "not found" in body.lower()
-                    ):
-                        last_err = (
-                            f"Model `{model}` unavailable; trying fallback…"
-                            if model != _models_to_try()[-1]
-                            else (
-                                "No working Groq model found. Set **GROQ_MODEL** to a "
-                                "supported model (e.g. llama-3.1-8b-instant)."
-                            )
+        async with concurrency.guild_slot(guild_id):
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                for model in _models_to_try():
+                    try:
+                        r = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "model": model,
+                                "messages": messages,
+                                "temperature": 0.7,
+                                "max_tokens": 1024,
+                            },
                         )
+                    except httpx.TimeoutException:
+                        last_err = "The AI service timed out. Try again in a moment."
                         continue
-                    last_err = "Something went wrong with AI. Please try again."
-                    continue
+                    except httpx.RequestError as e:
+                        log.error("Groq network error: %s", e)
+                        last_err = "Could not reach Groq. Check the server network connection."
+                        continue
 
-                data: dict[str, Any] = r.json()
-                text = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                    or ""
-                ).strip()
-                if not text:
-                    last_err = "AI returned an empty response. Try again."
-                    continue
+                    if r.status_code == 401:
+                        log.error("Groq 401 — invalid API key")
+                        return False, (
+                            "AI authentication failed. Check that **GROQ_API_KEY** is valid "
+                            "in the server environment and restart."
+                        )
+                    if r.status_code == 429:
+                        return False, (
+                            "Sorry — the global AI provider limit was reached. "
+                            "Wait a minute and try again."
+                        )
+                    if r.status_code >= 400:
+                        body = r.text[:400]
+                        log.error("Groq error model=%s status=%s body=%s", model, r.status_code, body)
+                        if r.status_code in (400, 404) and (
+                            "model" in body.lower() or "not found" in body.lower()
+                        ):
+                            last_err = (
+                                f"Model `{model}` unavailable; trying fallback…"
+                                if model != _models_to_try()[-1]
+                                else (
+                                    "No working Groq model found. Set **GROQ_MODEL** to a "
+                                    "supported model (e.g. llama-3.1-8b-instant)."
+                                )
+                            )
+                            continue
+                        last_err = "Something went wrong with AI. Please try again."
+                        continue
 
-                if guild_id is not None and consume_quota:
-                    ai_limits.consume(guild_id)
-                if model != (settings.groq_model or "").strip():
-                    log.info("Groq succeeded with fallback model=%s", model)
-                return True, text
+                    data: dict[str, Any] = r.json()
+                    text = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                        or ""
+                    ).strip()
+                    if not text:
+                        last_err = "AI returned an empty response. Try again."
+                        continue
 
-        return False, last_err
+                    if guild_id is not None and consume_quota:
+                        ai_limits.consume(guild_id)
+                    if model != (settings.groq_model or "").strip():
+                        log.info("Groq succeeded with fallback model=%s", model)
+                    return True, text
+
+            return False, last_err
     except Exception as e:
         log.exception("Groq request failed: %s", e)
         return False, "The AI service is temporarily unavailable. Try again in a moment."
