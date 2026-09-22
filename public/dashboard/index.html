@@ -20,8 +20,6 @@ button,input,select,textarea{font:inherit}
 .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:#3a4258}
 .btn-ghost{background:var(--panel2);color:var(--text)}
 .btn-danger{background:rgba(240,68,56,.15);color:#ff8b84;border:1px solid rgba(240,68,56,.3)}
-
-/* Landing */
 .landing{min-height:100%;display:flex;flex-direction:column}
 .landing-nav{display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--border)}
 .brand{font-weight:800;font-size:1.25rem;letter-spacing:-.03em}.brand span{color:var(--accent)}
@@ -33,8 +31,6 @@ button,input,select,textarea{font:inherit}
 .status-dot i{width:8px;height:8px;border-radius:50%;background:#555}
 .status-dot.ok i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
 .landing-footer{padding:20px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;gap:16px;flex-wrap:wrap}
-
-/* App shell */
 .app{display:none;height:100vh}
 .app.on{display:grid;grid-template-columns:260px 1fr}
 .sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 14px}
@@ -82,7 +78,6 @@ label.field textarea{min-height:100px;resize:vertical}
 </style>
 </head>
 <body>
-<!-- Landing -->
 <div id="landing" class="landing">
   <div class="landing-nav">
     <div class="brand">Omni<span>Bot</span></div>
@@ -108,8 +103,6 @@ label.field textarea{min-height:100px;resize:vertical}
     <a href="https://discord.gg/WpdH42HShV" target="_blank" rel="noopener">Join our Discord</a>
   </div>
 </div>
-
-<!-- App -->
 <div id="app" class="app">
   <aside class="sidebar" id="sidebar">
     <div class="side-brand">Omni<span>Bot</span></div>
@@ -144,12 +137,9 @@ label.field textarea{min-height:100px;resize:vertical}
     <div class="content" id="content"></div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
-
 <script>
 const S = { user:null, guilds:[], guildId:null, guildName:'', settings:{}, bot:{}, view:'servers' };
-
 const SECTIONS = {
   overview: null,
   ai: [
@@ -165,6 +155,7 @@ const SECTIONS = {
     {id:'moderation.blockedWords', label:'Blocked words (comma-separated)', type:'textarea'},
     {id:'security.enabled', label:'Anti-nuke monitoring', type:'bool'},
     {id:'security.mode', label:'Security mode', type:'select', options:['monitor','alert','lockdown']},
+    {id:'honeypot.enabled', label:'Honeypot channel protection', type:'bool'},
   ],
   engagement: [
     {id:'welcome.enabled', label:'Welcome messages', type:'bool'},
@@ -175,6 +166,12 @@ const SECTIONS = {
     {id:'leveling.enabled', label:'Leveling / XP', type:'bool'},
     {id:'autorole.enabled', label:'Autorole', type:'bool'},
     {id:'suggestions.enabled', label:'Suggestions', type:'bool'},
+    {id:'starboard.enabled', label:'Starboard', type:'bool'},
+    {id:'stickyRoles.enabled', label:'Sticky roles (restore on rejoin)', type:'bool'},
+    {id:'counting.enabled', label:'Counting game', type:'bool'},
+    {id:'wordchain.enabled', label:'Word-chain game', type:'bool'},
+    {id:'verification.enabled', label:'Verification gate', type:'bool'},
+    {id:'booster.enabled', label:'Booster celebration messages', type:'bool'},
   ],
   appeals: [
     {id:'appeals.enabled', label:'Enable appeals', type:'bool'},
@@ -200,7 +197,6 @@ const SECTIONS = {
     {id:'tempVoice.enabled', label:'Join-to-create temp voice', type:'bool'},
   ],
 };
-
 async function api(path, opts={}) {
   const r = await fetch(path, {
     credentials:'include',
@@ -215,18 +211,15 @@ async function api(path, opts={}) {
   const ct = r.headers.get('content-type')||'';
   return ct.includes('json') ? r.json() : r.text();
 }
-
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
-
 function showLanding(on) {
   document.getElementById('landing').style.display = on ? 'flex' : 'none';
   document.getElementById('app').classList.toggle('on', !on);
 }
-
 async function refreshAuth() {
   try {
     const me = await api('/auth/me');
@@ -238,7 +231,6 @@ async function refreshAuth() {
     return false;
   }
 }
-
 function setView(view) {
   S.view = view;
   document.querySelectorAll('.side-nav button').forEach(b => {
@@ -256,12 +248,10 @@ function setView(view) {
   render();
   document.getElementById('sidebar').classList.remove('open');
 }
-
 async function loadGuilds() {
   const data = await api('/guilds');
   S.guilds = data.guilds || [];
 }
-
 async function openGuild(id, name) {
   S.guildId = id; S.guildName = name || id;
   const [s, bot] = await Promise.all([
@@ -272,7 +262,6 @@ async function openGuild(id, name) {
   S.bot = bot || {};
   setView('overview');
 }
-
 function renderServers() {
   if (!S.guilds.length) {
     return `<div class="card"><h3>No servers yet</h3>
@@ -285,7 +274,6 @@ function renderServers() {
       <div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div>
     </div>`).join('')}</div>`;
 }
-
 function renderOverview() {
   const b = S.bot;
   return `
@@ -298,7 +286,6 @@ function renderOverview() {
     <div class="card" style="margin-top:16px"><h3>Quick tip</h3>
       <p class="desc">Use the sidebar to configure AI personality, moderation, welcomes, appeals and music. Changes save to OmniBot immediately.</p></div>`;
 }
-
 function renderSettings(keys) {
   if (!keys) return renderOverview();
   const rows = keys.map(f => {
@@ -318,7 +305,6 @@ function renderSettings(keys) {
   return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Settings apply only to this server.</p>${rows}
     <button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button></div>`;
 }
-
 async function renderAppealPortal() {
   let servers = [];
   try { servers = (await api('/appeals/servers')).servers || []; } catch {}
@@ -339,7 +325,6 @@ async function renderAppealPortal() {
       <button class="btn btn-primary" id="appeal-submit" style="margin-top:12px">Submit</button>
     </div></div>`;
 }
-
 async function renderAdvertise() {
   let servers = [];
   try { servers = (await api('/advertise/list')).servers || []; } catch {}
@@ -351,7 +336,6 @@ async function renderAdvertise() {
         ${s.invite?`<a class="btn btn-primary" href="${s.invite}" target="_blank">Join</a>`:''}
       </div>`).join('') || '<p class="desc">No listings yet.</p>'}</div></div>`;
 }
-
 async function render() {
   const el = document.getElementById('content');
   const v = S.view;
@@ -414,7 +398,6 @@ async function render() {
     } catch (e) { toast('Save failed: ' + e.message); }
   };
 }
-
 document.getElementById('side-nav').onclick = e => {
   const b = e.target.closest('button[data-view]');
   if (!b) return;
@@ -431,7 +414,6 @@ document.getElementById('btn-advertise-home').onclick = async () => {
   showLanding(false);
   setView('advertise');
 };
-
 (async function init() {
   try {
     const h = await api('/health');
@@ -441,7 +423,6 @@ document.getElementById('btn-advertise-home').onclick = async () => {
   } catch {
     document.getElementById('bot-status').innerHTML = '<i></i> Unreachable';
   }
-
   const authed = await refreshAuth();
   if (!authed) { showLanding(true); return; }
   showLanding(false);
