@@ -18,7 +18,8 @@ class General(commands.Cog):
             title="🤖 OmniBot Help",
             description=(
                 "All-in-one Discord bot. **Slash**, **prefix** (`!`), and natural `omni …`.\n"
-                f"AI shares **{limit}/server/day**. Each server max **4 concurrent** tasks.\n"
+                f"AI shares **{limit}/server/day**.\n"
+                "Resource pool: **4** tasks bot-wide, **1 per server**; extras queue.\n"
                 "Many tools are prefix/dashboard-only to stay under Discord's 100 slash limit."
             ),
             color=0x5B6CFF,
