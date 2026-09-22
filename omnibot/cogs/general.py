@@ -1,4 +1,4 @@
-"""Core utility commands."""
+"""Core utility commands + comprehensive help."""
 from __future__ import annotations
 
 import discord
@@ -17,43 +17,68 @@ class General(commands.Cog):
         embed = discord.Embed(
             title="🤖 OmniBot Help",
             description=(
-                "All-in-one Discord bot — moderation, AI, music, economy, appeals, and more.\n"
-                f"AI features share **{limit} requests per server per day**.\n"
-                "Staff-only commands require the matching Discord permission."
+                "All-in-one Discord bot. Slash, prefix (`!`), and natural `omni …` invocation.\n"
+                f"AI features share **{limit}/server/day**.\n"
+                "Dashboard: configure everything visually."
             ),
-            color=0x5865F2,
+            color=0x5B6CFF,
         )
         embed.add_field(
             name="🧠 AI",
-            value="`/ask` `/chat` `/aisummary` `/aimoderate` `/aisecurity` `/imagine` `/clearmemory`\nNatural: `omni explain …`",
+            value="`/ask` `/chat` `/aisummary` `/aimoderate` `/aisecurity` `/imagine` `/clearmemory`",
             inline=False,
         )
         embed.add_field(
-            name="🛡️ Moderation",
-            value="`/ban` `/kick` `/timeout` `/warn` `/warnings` `/clear` `/lock` `/unlock` `/slowmode` `/automod`",
+            name="🛡️ Moderation & security",
+            value="`/ban` `/kick` `/timeout` `/warn` `/clear` `/lock` `/unlock` `/slowmode` `/automod` + anti-nuke/spam",
             inline=False,
         )
         embed.add_field(
-            name="🎵 Music",
-            value="`/music play|skip|stop|queue|pause|resume`",
+            name="📋 Logging · 🎫 Tickets · 👮 Staff",
+            value="`/logging set` · `/ticket open|claim|close` · `/staff note|notes|case`",
             inline=False,
         )
         embed.add_field(
-            name="🎉 Fun & economy",
-            value="`/coinflip` `/dice` `/rps` `/slots` `/trivia` `/daily` `/balance` `/shop` `/work`",
+            name="🎭 Roles · 🎉 Giveaways · 📢 Announce",
+            value="`/roles …` · `/giveaway start|reroll` · `/announce send`",
             inline=False,
         )
         embed.add_field(
-            name="⚙️ Server",
-            value="`/welcome` `/goodbye` `/autorole` `/deadchat` `/giveaway` `/reactionrole` `/dashboard`",
+            name="🎵 Music · 🔊 Voice",
+            value="`/music play|skip|stop|queue|pause|resume` · `/voice setup-join-to-create`",
             inline=False,
         )
         embed.add_field(
-            name="🎫 Appeals & more",
-            value="`/appeal` `/advertise` `/partner` `/captcha` `/userphone` `/quiz` `/translate`",
+            name="💰 Economy · ⭐ Levels · 👤 Profile",
+            value="`/daily` `/balance` `/shop` `/work` · `/level rank|leaderboard` · `/profile view|setbio|rep`",
             inline=False,
         )
-        embed.set_footer(text="Prefix + natural commands · AI limit resets daily")
+        embed.add_field(
+            name="🎮 Games · 🐾 Fun",
+            value="`/game trivia|guess|hangman` · `/fun eightball|ship|joke|meme|cat|dog|rps|…`",
+            inline=False,
+        )
+        embed.add_field(
+            name="🧰 Utilities · 🔎 Search · 🌍 Translate",
+            value="`/util weather|calc|remind|poll|…` · `/search wiki|urban|github|define` · `/translate`",
+            inline=False,
+        )
+        embed.add_field(
+            name="📊 Info · 🔬 Science · 💹 Finance",
+            value="`/info user|server|role|bot` · `/science apod|iss` · `/finance crypto|fx`",
+            inline=False,
+        )
+        embed.add_field(
+            name="💡 Suggest · 🎂 Birthday · ⚙️ Auto · 💾 Backup",
+            value="`/suggest submit` · `/birthday set` · `/auto trigger-add|custom-add` · `/backup export`",
+            inline=False,
+        )
+        embed.add_field(
+            name="🌐 Dashboard",
+            value="`/dashboard` — full server control panel",
+            inline=False,
+        )
+        embed.set_footer(text="OmniBot · Feature universe edition")
         return embed
 
     @app_commands.command(name="ping", description="Check bot latency")
@@ -66,13 +91,13 @@ class General(commands.Cog):
     async def ping_prefix(self, ctx: commands.Context):
         await ctx.reply(f"Pong! `{round(self.bot.latency * 1000)}ms`", mention_author=False)
 
-    @app_commands.command(name="help", description="Show OmniBot commands and features")
-    async def help_cmd(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embeds=[self._help_embed()])
+    @app_commands.command(name="help", description="Show OmniBot commands")
+    async def help_slash(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=self._help_embed())
 
     @commands.command(name="help")
     async def help_prefix(self, ctx: commands.Context):
-        await ctx.reply(embeds=[self._help_embed()], mention_author=False)
+        await ctx.reply(embed=self._help_embed(), mention_author=False)
 
     @app_commands.command(name="dashboard", description="Open the OmniBot dashboard")
     async def dashboard(self, interaction: discord.Interaction):
@@ -80,7 +105,7 @@ class General(commands.Cog):
         embed = discord.Embed(
             title="OmniBot Dashboard",
             description=f"Manage your server at:\n**{url}**",
-            color=0x5865F2,
+            color=0x5B6CFF,
         )
         await interaction.response.send_message(embeds=[embed])
 
@@ -88,31 +113,6 @@ class General(commands.Cog):
     async def dashboard_prefix(self, ctx: commands.Context):
         url = settings.public_base_url.rstrip("/") or "https://omnibot.wisp.uno"
         await ctx.reply(f"Dashboard: {url}", mention_author=False)
-
-    @app_commands.command(name="serverinfo", description="Server information")
-    async def serverinfo(self, interaction: discord.Interaction):
-        g = interaction.guild
-        if not g:
-            return await interaction.response.send_message("Guild only.", ephemeral=True)
-        embed = discord.Embed(title=g.name, color=0x5865F2)
-        if g.icon:
-            embed.set_thumbnail(url=g.icon.url)
-        embed.add_field(name="Members", value=str(g.member_count))
-        embed.add_field(name="Channels", value=str(len(g.channels)))
-        embed.add_field(name="Roles", value=str(len(g.roles)))
-        embed.add_field(name="ID", value=str(g.id))
-        await interaction.response.send_message(embeds=[embed])
-
-    @app_commands.command(name="userinfo", description="User information")
-    async def userinfo(self, interaction: discord.Interaction, user: discord.Member | None = None):
-        user = user or interaction.user  # type: ignore
-        embed = discord.Embed(title=str(user), color=0x5865F2)
-        if user.display_avatar:
-            embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="ID", value=str(user.id))
-        if isinstance(user, discord.Member) and user.joined_at:
-            embed.add_field(name="Joined", value=discord.utils.format_dt(user.joined_at))
-        await interaction.response.send_message(embeds=[embed])
 
     @app_commands.command(name="terms", description="OmniBot Terms of Service link")
     async def terms(self, interaction: discord.Interaction):
