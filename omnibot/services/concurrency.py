@@ -1,7 +1,7 @@
 """
 Global resource gate for OmniBot.
 
-- At most GLOBAL_MAX (4) heavy tasks across the entire bot process.
+- At most GLOBAL_MAX (10) heavy tasks across the entire bot process.
 - At most 1 heavy task per guild at a time.
 - Extra requests wait in a FIFO queue (asyncio Semaphore), they are not rejected.
 """
@@ -12,7 +12,7 @@ import contextvars
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-GLOBAL_MAX = 4
+GLOBAL_MAX = 10
 PER_GUILD_MAX = 1
 
 _global_sem: asyncio.Semaphore | None = None
@@ -42,7 +42,7 @@ async def guild_slot(guild_id: int | str | None) -> AsyncIterator[None]:
     """
     Wait (queue) until:
       1) this guild has a free local slot (max 1), and
-      2) a global slot is free (max 4 across all guilds).
+      2) a global slot is free (max 10 across all guilds).
 
     Nested calls in the same task are no-ops (safe for voice→AI).
     """
