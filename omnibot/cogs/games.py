@@ -109,6 +109,64 @@ class Games(commands.Cog):
             result = "You lose"
         await interaction.response.send_message(f"You **{choice}** vs **{bot_c}** → {result}")
 
+    @game.command(name="tictactoe", description="Challenge someone to tic-tac-toe")
+    async def tictactoe(self, interaction: discord.Interaction, opponent: discord.Member):
+        if opponent.bot or opponent.id == interaction.user.id:
+            return await interaction.response.send_message("Pick a real opponent.", ephemeral=True)
+        board = [" "] * 9
+        turn = interaction.user.id
+        players = {interaction.user.id: "X", opponent.id: "O"}
+
+        def render():
+            rows = []
+            for i in range(0, 9, 3):
+                rows.append(" | ".join(board[i:i+3]))
+            return "```\n" + "\n---------\n".join(rows) + "\n```"
+
+        view = discord.ui.View(timeout=120)
+        labels = [str(i+1) for i in range(9)]
+
+        async def make_cb(idx: int):
+            async def cb(inter: discord.Interaction):
+                nonlocal turn
+                if inter.user.id != turn:
+                    return await inter.response.send_message("Not your turn.", ephemeral=True)
+                if board[idx] != " ":
+                    return await inter.response.send_message("Taken.", ephemeral=True)
+                board[idx] = players[inter.user.id]
+                wins = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+                mark = players[inter.user.id]
+                if any(board[a]==board[b]==board[c]==mark for a,b,c in wins):
+                    for c in view.children:
+                        c.disabled = True
+                    return await inter.response.edit_message(content=f"{render()}\n🎉 {inter.user.mention} wins!", view=view)
+                if all(c != " " for c in board):
+                    for c in view.children:
+                        c.disabled = True
+                    return await inter.response.edit_message(content=f"{render()}\nTie!", view=view)
+                turn = opponent.id if turn == interaction.user.id else interaction.user.id
+                await inter.response.edit_message(content=f"{render()}\nTurn: <@{turn}>", view=view)
+            return cb
+
+        for i in range(9):
+            btn = discord.ui.Button(label=labels[i], style=discord.ButtonStyle.secondary, row=i//3)
+            btn.callback = await make_cb(i)
+            view.add_item(btn)
+
+        await interaction.response.send_message(
+            f"Tic-Tac-Toe: {interaction.user.mention} (X) vs {opponent.mention} (O)\n{render()}\nTurn: {interaction.user.mention}",
+            view=view,
+        )
+
+    @game.command(name="count", description="Info about counting channel (setup with /engage counting-setup)")
+    async def count_info(self, interaction: discord.Interaction):
+        from omnibot import storage
+        data = storage.load_guild(interaction.guild.id)
+        c = data.get("counting") or {}
+        if not c.get("enabled"):
+            return await interaction.response.send_message("Counting not set up. Admins: `/engage counting-setup`.")
+        await interaction.response.send_message(f"Next number: **{c.get('next', 1)}** in <#{c.get('channelId')}>")
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Games(bot))
