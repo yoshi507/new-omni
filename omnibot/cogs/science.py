@@ -16,6 +16,7 @@ class Science(commands.Cog):
     @science.command(name="apod", description="NASA Astronomy Picture of the Day")
     async def apod(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        # Demo key works with rate limits
         try:
             async with httpx.AsyncClient(timeout=20) as client:
                 r = await client.get("https://api.nasa.gov/planetary/apod", params={"api_key": "DEMO_KEY"})

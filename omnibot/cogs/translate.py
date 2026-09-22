@@ -16,13 +16,20 @@ class Translate(commands.Cog):
     async def translate(self, interaction: discord.Interaction, text: str, target: str = "en"):
         await interaction.response.defer()
         target = target.lower().strip()[:8]
+        # MyMemory free API
         try:
             async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(
+                    "https://api.mymemory.translated.net/get",
+                    params={"q": text[:500], "langpair": f"|{target}" if "|" not in target else target},
+                )
+                # langpair needs source|target — auto detect with unknown source
                 r = await client.get(
                     "https://api.mymemory.translated.net/get",
                     params={"q": text[:500], "langpair": f"autodetect|{target}"},
                 )
                 if r.status_code != 200:
+                    # retry with en|target if auto fails
                     r = await client.get(
                         "https://api.mymemory.translated.net/get",
                         params={"q": text[:500], "langpair": f"en|{target}"},

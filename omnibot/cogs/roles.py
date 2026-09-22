@@ -74,6 +74,7 @@ class Roles(commands.Cog):
         key = f"{payload.message_id}:{emoji}"
         entry = rr.get(key)
         if not entry:
+            # try name-only match
             for k, v in rr.items():
                 if k.startswith(f"{payload.message_id}:") and (v.get("emoji") == emoji or emoji in k):
                     entry = v
