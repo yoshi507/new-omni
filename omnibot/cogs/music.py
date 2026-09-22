@@ -128,56 +128,49 @@ class Music(commands.Cog):
             )
 
         await interaction.response.defer()
-        if not await concurrency.try_acquire(interaction.guild.id, timeout=0.1):
-            return await interaction.followup.send(
-                "⏳ This server is already handling 4 tasks. Try again in a moment."
-            )
-        gp = self._gp(interaction.guild.id)
-        channel = interaction.user.voice.channel
+        # Queue on global (max 4) + this guild (max 1) — waits instead of rejecting
+        async with concurrency.guild_slot(interaction.guild.id):
+            gp = self._gp(interaction.guild.id)
+            channel = interaction.user.voice.channel
 
-        try:
-            if not gp.voice or not gp.voice.is_connected():
-                gp.voice = await channel.connect()
-            elif gp.voice.channel and gp.voice.channel.id != channel.id:
-                await gp.voice.move_to(channel)
-        except Exception as e:
-            concurrency.release(interaction.guild.id)
-            return await interaction.followup.send(f"Could not join voice: {e}")
+            try:
+                if not gp.voice or not gp.voice.is_connected():
+                    gp.voice = await channel.connect()
+                elif gp.voice.channel and gp.voice.channel.id != channel.id:
+                    await gp.voice.move_to(channel)
+            except Exception as e:
+                return await interaction.followup.send(f"Could not join voice: {e}")
 
-        try:
-            track = await self._resolve(query.strip())
-        except Exception as e:
-            log.exception("Resolve failed")
-            concurrency.release(interaction.guild.id)
-            return await interaction.followup.send(
-                f"❌ Could not find that track ({e}). Try a YouTube URL or different search."
-            )
+            try:
+                track = await self._resolve(query.strip())
+            except Exception as e:
+                log.exception("Resolve failed")
+                return await interaction.followup.send(
+                    f"❌ Could not find that track ({e}). Try a YouTube URL or different search."
+                )
 
-        title = track["title"]
-        entry = {
-            "title": title,
-            "url": track["url"],
-            "webpage": track.get("webpage") or query,
-        }
+            title = track["title"]
+            entry = {
+                "title": title,
+                "url": track["url"],
+                "webpage": track.get("webpage") or query,
+            }
 
-        if gp.voice.is_playing() or gp.voice.is_paused():
-            gp.queue.append(entry)
-            concurrency.release(interaction.guild.id)
-            await interaction.followup.send(f"Queued **{title}**")
-            return
+            if gp.voice.is_playing() or gp.voice.is_paused():
+                gp.queue.append(entry)
+                await interaction.followup.send(f"Queued **{title}**")
+                return
 
-        try:
-            src = self._make_source(entry["url"])
-            gp.current = entry
-            gp.voice.play(src, after=self._after(interaction.guild.id))
-            concurrency.release(interaction.guild.id)
-            await interaction.followup.send(f"▶️ Playing **{title}**")
-        except Exception as e:
-            log.exception("Play failed")
-            concurrency.release(interaction.guild.id)
-            await interaction.followup.send(
-                f"❌ Could not play audio ({e}). Ensure **ffmpeg** is installed on the server."
-            )
+            try:
+                src = self._make_source(entry["url"])
+                gp.current = entry
+                gp.voice.play(src, after=self._after(interaction.guild.id))
+                await interaction.followup.send(f"▶️ Playing **{title}**")
+            except Exception as e:
+                log.exception("Play failed")
+                await interaction.followup.send(
+                    f"❌ Could not play audio ({e}). Ensure **ffmpeg** is installed on the server."
+                )
 
     @music.command(name="skip", description="Skip current track")
     async def skip(self, interaction: discord.Interaction):
