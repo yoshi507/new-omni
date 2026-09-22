@@ -20,6 +20,7 @@ class Backups(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def export(self, interaction: discord.Interaction):
         data = storage.load_guild(interaction.guild.id)
+        # strip large runtime records optionally keep structure
         payload = json.dumps(data, indent=2, default=str)[:1900]
         await interaction.response.send_message(f"```json\n{payload}\n```", ephemeral=True)
 

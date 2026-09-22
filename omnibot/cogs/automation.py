@@ -16,7 +16,7 @@ class Automation(commands.Cog):
 
     auto = app_commands.Group(name="auto", description="Automations & custom commands")
 
-    @auto.command(name="trigger-add", description="Add keyword to response trigger")
+    @auto.command(name="trigger-add", description="Add keyword → response trigger")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def trigger_add(self, interaction: discord.Interaction, keyword: str, response: str):
         def mut(d):
@@ -42,7 +42,7 @@ class Automation(commands.Cog):
         triggers = data.get("triggers") or {}
         if not triggers:
             return await interaction.response.send_message("No triggers.", ephemeral=True)
-        lines = [f"`{k}` -> {v[:80]}" for k, v in list(triggers.items())[:30]]
+        lines = [f"`{k}` → {v[:80]}" for k, v in list(triggers.items())[:30]]
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @auto.command(name="custom-add", description="Add a custom prefix command")
@@ -70,6 +70,7 @@ class Automation(commands.Cog):
         if message.author.bot or not message.guild or not message.content:
             return
         data = storage.load_guild(message.guild.id)
+        # keyword triggers
         triggers = data.get("triggers") or {}
         content_l = message.content.lower()
         for key, resp in triggers.items():
@@ -79,6 +80,7 @@ class Automation(commands.Cog):
                 except Exception:
                     pass
                 break
+        # custom prefix commands
         prefix = (data.get("commandSettings") or {}).get("prefix") or "!"
         if message.content.startswith(prefix):
             name = message.content[len(prefix):].split()[0].lower()

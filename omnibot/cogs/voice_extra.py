@@ -34,6 +34,7 @@ class VoiceExtra(commands.Cog):
         if not tv.get("enabled") or not tv.get("lobbyChannelId"):
             return
         lobby_id = int(tv["lobbyChannelId"])
+        # create room
         if after.channel and after.channel.id == lobby_id:
             try:
                 ch = await member.guild.create_voice_channel(
@@ -45,6 +46,7 @@ class VoiceExtra(commands.Cog):
                 await member.move_to(ch)
             except Exception:
                 pass
+        # cleanup empty temp
         if before.channel and before.channel.id in self.temp_channels:
             if len(before.channel.members) == 0:
                 try:
