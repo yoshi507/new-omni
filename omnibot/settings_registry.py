@@ -16,6 +16,7 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "moderation.blockedWords", "path": "automod.blockedWords", "type": "textarea", "default": "", "category": "moderation"},
     {"id": "security.enabled", "path": "security.enabled", "type": "bool", "default": True, "category": "moderation"},
     {"id": "security.mode", "path": "security.mode", "type": "select", "default": "monitor", "options": ["monitor", "alert", "lockdown"], "category": "moderation"},
+    {"id": "honeypot.enabled", "path": "honeypot.enabled", "type": "bool", "default": False, "category": "moderation"},
     # Engagement
     {"id": "welcome.enabled", "path": "welcomeSettings.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "welcome.message", "path": "welcomeSettings.message", "type": "textarea", "default": "Welcome {user}!", "category": "engagement"},
@@ -24,6 +25,13 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "deadchat.minutes", "path": "deadChat.minutes", "type": "number", "default": 60, "category": "engagement"},
     {"id": "leveling.enabled", "path": "levelSettings.enabled", "type": "bool", "default": True, "category": "engagement"},
     {"id": "autorole.enabled", "path": "autorole.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "suggestions.enabled", "path": "suggestions.enabled", "type": "bool", "default": True, "category": "engagement"},
+    {"id": "starboard.enabled", "path": "starboard.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "stickyRoles.enabled", "path": "stickyRoles.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "counting.enabled", "path": "counting.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "wordchain.enabled", "path": "wordchain.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "verification.enabled", "path": "verification.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "booster.enabled", "path": "booster.enabled", "type": "bool", "default": False, "category": "engagement"},
     # Appeals
     {"id": "appeals.enabled", "path": "appeals.enabled", "type": "bool", "default": False, "category": "appeals"},
     {"id": "appeals.cooldownHours", "path": "appeals.cooldownHours", "type": "number", "default": 24, "category": "appeals"},
@@ -37,8 +45,6 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "logging.voice", "path": "logging.voice", "type": "bool", "default": False, "category": "logging"},
     # Tickets
     {"id": "tickets.enabled", "path": "tickets.enabled", "type": "bool", "default": False, "category": "tickets"},
-    # Suggestions
-    {"id": "suggestions.enabled", "path": "suggestions.enabled", "type": "bool", "default": False, "category": "engagement"},
     # Economy
     {"id": "economy.enabled", "path": "economy.enabled", "type": "bool", "default": True, "category": "fun"},
     # Temp voice
@@ -80,3 +86,28 @@ def validate_setting(defn: dict[str, Any], val: Any) -> tuple[bool, Any, str | N
 
 def get_defaults_flat() -> dict[str, Any]:
     return {s["id"]: s["default"] for s in SETTINGS}
+
+
+def get_defaults_nested() -> dict[str, Any]:
+    """Build nested default guild data from SETTINGS paths."""
+    root: dict[str, Any] = {}
+    for s in SETTINGS:
+        parts = s["path"].split(".")
+        cur = root
+        for p in parts[:-1]:
+            cur = cur.setdefault(p, {})
+        cur[parts[-1]] = s["default"]
+    root.setdefault("levels", {})
+    root.setdefault("invites", {})
+    root.setdefault("starboardPosts", {})
+    root.setdefault("triggers", {})
+    root.setdefault("customCommands", {})
+    root.setdefault("birthdays", {})
+    root.setdefault("stickyRoles", {"enabled": False, "saved": {}})
+    root.setdefault("verification", {"enabled": False})
+    root.setdefault("honeypot", {"enabled": False})
+    root.setdefault("booster", {"enabled": False})
+    root.setdefault("counting", {"enabled": False, "next": 1})
+    root.setdefault("wordchain", {"enabled": False})
+    root.setdefault("starboard", {"enabled": False})
+    return root

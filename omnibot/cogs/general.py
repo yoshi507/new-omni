@@ -17,20 +17,20 @@ class General(commands.Cog):
         embed = discord.Embed(
             title="🤖 OmniBot Help",
             description=(
-                "All-in-one Discord bot. Slash, prefix (`!`), and natural `omni …` invocation.\n"
-                f"AI features share **{limit}/server/day**.\n"
-                "Dashboard: configure everything visually."
+                "All-in-one Discord bot. **Slash**, **prefix** (`!`), and natural `omni …`.\n"
+                f"AI shares **{limit}/server/day**.\n"
+                "Many tools are prefix/dashboard-only to stay under Discord's 100 slash limit."
             ),
             color=0x5B6CFF,
         )
         embed.add_field(
             name="🧠 AI",
-            value="`/ask` `/chat` `/aisummary` `/aimoderate` `/aisecurity` `/imagine` `/clearmemory`",
+            value="`/ask` `/chat` `/aisummary` `/aimoderate` `/aisecurity` `/imagine` `/clearmemory` · personality in dashboard",
             inline=False,
         )
         embed.add_field(
             name="🛡️ Moderation & security",
-            value="`/ban` `/kick` `/timeout` `/warn` `/clear` `/lock` `/unlock` `/slowmode` `/automod` + anti-nuke/spam",
+            value="`/ban` `/kick` `/timeout` `/warn` `/clear` `/lock` `/unlock` `/slowmode` · automod · anti-nuke · honeypot (`/engage honeypot-setup`)",
             inline=False,
         )
         embed.add_field(
@@ -40,7 +40,17 @@ class General(commands.Cog):
         )
         embed.add_field(
             name="🎭 Roles · 🎉 Giveaways · 📢 Announce",
-            value="`/roles …` · `/giveaway start|reroll` · `/announce send`",
+            value="`/roles …` · sticky (`/engage sticky-toggle`) · `/giveaway start|reroll` · `/announce send`",
+            inline=False,
+        )
+        embed.add_field(
+            name="⭐ Engagement",
+            value=(
+                "Starboard `/engage starboard-setup` · Invites `/invite leaderboard|stats` · "
+                "Verify `/verify setup` · Counting `/engage counting-setup` · "
+                "Word-chain `/engage wordchain-setup` · Booster `/engage booster-setup` · "
+                "`/afk` or `!afk`"
+            ),
             inline=False,
         )
         embed.add_field(
@@ -55,30 +65,30 @@ class General(commands.Cog):
         )
         embed.add_field(
             name="🎮 Games · 🐾 Fun",
-            value="`/game trivia|guess|hangman` · `/fun eightball|ship|joke|meme|cat|dog|rps|…`",
+            value="`/game trivia|guess|hangman|rps|tictactoe|count` · `/fun eightball|ship|joke|meme|cat|dog|…`",
             inline=False,
         )
         embed.add_field(
             name="🧰 Utilities · 🔎 Search · 🌍 Translate",
-            value="`/util weather|calc|remind|poll|…` · `/search wiki|urban|github|define` · `/translate`",
+            value="`/util weather|calc|remind|poll|hash|password|color|…` · `/search wiki|urban|github|define` · `/translate`",
             inline=False,
         )
         embed.add_field(
             name="📊 Info · 🔬 Science · 💹 Finance",
-            value="`/info user|server|role|bot` · `/science apod|iss` · `/finance crypto|fx`",
+            value="`/info user|server|role|channel|avatar|bot|perms` · `/science apod|iss|peopleinspace` · `/finance crypto|fx`",
             inline=False,
         )
         embed.add_field(
-            name="💡 Suggest · 🎂 Birthday · ⚙️ Auto · 💾 Backup",
-            value="`/suggest submit` · `/birthday set` · `/auto trigger-add|custom-add` · `/backup export`",
+            name="⚙️ Automation · 💾 Backup · 🎂 Community",
+            value="`/auto trigger-add|custom-add` · `/backup export|snapshot` · `/bday set|upcoming` · suggestions",
             inline=False,
         )
         embed.add_field(
             name="🌐 Dashboard",
-            value="`/dashboard` — full server control panel",
+            value="`/dashboard` — AI personality, toggles for starboard/sticky/verify/counting/music/…",
             inline=False,
         )
-        embed.set_footer(text="OmniBot · Feature universe edition")
+        embed.set_footer(text="OmniBot · Feature universe edition · prefix commands work for most actions")
         return embed
 
     @app_commands.command(name="ping", description="Check bot latency")
