@@ -38,7 +38,6 @@ def _extract(query: str) -> dict:
         url = info.get("url") or info.get("webpage_url")
         if not url:
             raise RuntimeError("No stream URL")
-        # Prefer direct media url from formats if top-level url is a webpage
         if not info.get("url") and info.get("formats"):
             for f in reversed(info["formats"]):
                 if f.get("url") and (f.get("acodec") or "none") != "none":
@@ -97,7 +96,6 @@ class Music(commands.Cog):
             return
         item = gp.queue.pop(0)
         try:
-            # Re-resolve if needed (YouTube URLs expire)
             if item.get("webpage") and (
                 "youtube" in str(item.get("webpage", "")).lower()
                 or "youtu.be" in str(item.get("webpage", "")).lower()
