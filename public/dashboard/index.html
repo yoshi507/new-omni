@@ -121,6 +121,10 @@ label.field textarea{min-height:100px;resize:vertical}
       <button data-view="engagement" class="needs-guild hidden">Engagement</button>
       <button data-view="appeals" class="needs-guild hidden">Appeals</button>
       <button data-view="music" class="needs-guild hidden">Music</button>
+      <button data-view="logging" class="needs-guild hidden">Logging</button>
+      <button data-view="tickets" class="needs-guild hidden">Tickets</button>
+      <button data-view="fun" class="needs-guild hidden">Economy & Fun</button>
+      <button data-view="voice" class="needs-guild hidden">Voice</button>
       <button data-view="appeal-portal">Appeal portal</button>
       <button data-view="advertise">Advertise</button>
     </nav>
@@ -170,6 +174,7 @@ const SECTIONS = {
     {id:'deadchat.minutes', label:'Dead chat minutes', type:'number'},
     {id:'leveling.enabled', label:'Leveling / XP', type:'bool'},
     {id:'autorole.enabled', label:'Autorole', type:'bool'},
+    {id:'suggestions.enabled', label:'Suggestions', type:'bool'},
   ],
   appeals: [
     {id:'appeals.enabled', label:'Enable appeals', type:'bool'},
@@ -180,6 +185,19 @@ const SECTIONS = {
   music: [
     {id:'music.enabled', label:'Enable music', type:'bool'},
     {id:'music.defaultVolume', label:'Default volume (0–100)', type:'number'},
+  ],
+  logging: [
+    {id:'logging.enabled', label:'Enable logging', type:'bool'},
+    {id:'logging.voice', label:'Log voice joins/moves', type:'bool'},
+  ],
+  tickets: [
+    {id:'tickets.enabled', label:'Enable tickets', type:'bool'},
+  ],
+  fun: [
+    {id:'economy.enabled', label:'Enable economy/games currency', type:'bool'},
+  ],
+  voice: [
+    {id:'tempVoice.enabled', label:'Join-to-create temp voice', type:'bool'},
   ],
 };
 
@@ -232,7 +250,7 @@ function setView(view) {
   const titles = {
     servers:'Your servers', overview:'Overview', ai:'AI & Personality',
     moderation:'Moderation', engagement:'Engagement', appeals:'Appeals',
-    music:'Music', 'appeal-portal':'Appeal a punishment', advertise:'Advertise board'
+    music:'Music', logging:'Logging', tickets:'Tickets', fun:'Economy & Fun', voice:'Voice', 'appeal-portal':'Appeal a punishment', advertise:'Advertise board'
   };
   document.getElementById('page-title').textContent = titles[view] || view;
   render();
