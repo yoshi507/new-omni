@@ -9,6 +9,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from omnibot.services import concurrency
+
 log = logging.getLogger("omnibot.music")
 _executor = ThreadPoolExecutor(max_workers=2)
 
@@ -38,7 +40,6 @@ def _extract(query: str) -> dict:
         url = info.get("url") or info.get("webpage_url")
         if not url:
             raise RuntimeError("No stream URL")
-        # Prefer direct media url from formats if top-level url is a webpage
         if not info.get("url") and info.get("formats"):
             for f in reversed(info["formats"]):
                 if f.get("url") and (f.get("acodec") or "none") != "none":
@@ -97,7 +98,6 @@ class Music(commands.Cog):
             return
         item = gp.queue.pop(0)
         try:
-            # Re-resolve if needed (YouTube URLs expire)
             if item.get("webpage") and (
                 "youtube" in str(item.get("webpage", "")).lower()
                 or "youtu.be" in str(item.get("webpage", "")).lower()
@@ -128,6 +128,10 @@ class Music(commands.Cog):
             )
 
         await interaction.response.defer()
+        if not await concurrency.try_acquire(interaction.guild.id, timeout=0.1):
+            return await interaction.followup.send(
+                "⏳ This server is already handling 4 tasks. Try again in a moment."
+            )
         gp = self._gp(interaction.guild.id)
         channel = interaction.user.voice.channel
 
@@ -137,12 +141,14 @@ class Music(commands.Cog):
             elif gp.voice.channel and gp.voice.channel.id != channel.id:
                 await gp.voice.move_to(channel)
         except Exception as e:
+            concurrency.release(interaction.guild.id)
             return await interaction.followup.send(f"Could not join voice: {e}")
 
         try:
             track = await self._resolve(query.strip())
         except Exception as e:
             log.exception("Resolve failed")
+            concurrency.release(interaction.guild.id)
             return await interaction.followup.send(
                 f"❌ Could not find that track ({e}). Try a YouTube URL or different search."
             )
@@ -156,6 +162,7 @@ class Music(commands.Cog):
 
         if gp.voice.is_playing() or gp.voice.is_paused():
             gp.queue.append(entry)
+            concurrency.release(interaction.guild.id)
             await interaction.followup.send(f"Queued **{title}**")
             return
 
@@ -163,9 +170,11 @@ class Music(commands.Cog):
             src = self._make_source(entry["url"])
             gp.current = entry
             gp.voice.play(src, after=self._after(interaction.guild.id))
+            concurrency.release(interaction.guild.id)
             await interaction.followup.send(f"▶️ Playing **{title}**")
         except Exception as e:
             log.exception("Play failed")
+            concurrency.release(interaction.guild.id)
             await interaction.followup.send(
                 f"❌ Could not play audio ({e}). Ensure **ffmpeg** is installed on the server."
             )
