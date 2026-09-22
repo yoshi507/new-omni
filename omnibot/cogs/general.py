@@ -18,7 +18,7 @@ class General(commands.Cog):
             title="🤖 OmniBot Help",
             description=(
                 "All-in-one Discord bot. **Slash**, **prefix** (`!`), and natural `omni …`.\n"
-                f"AI shares **{limit}/server/day**.\n"
+                f"AI shares **{limit}/server/day**. Each server max **4 concurrent** tasks.\n"
                 "Many tools are prefix/dashboard-only to stay under Discord's 100 slash limit."
             ),
             color=0x5B6CFF,
@@ -54,8 +54,8 @@ class General(commands.Cog):
             inline=False,
         )
         embed.add_field(
-            name="🎵 Music · 🔊 Voice",
-            value="`/music play|skip|stop|queue|pause|resume` · `/voice setup-join-to-create`",
+            name="🎵 Music · 🔊 Voice speech",
+            value="`/music play|skip|stop|queue|pause|resume` · `/voice join|leave|say|talk|voiceinfo` · join-to-create",
             inline=False,
         )
         embed.add_field(
@@ -85,7 +85,7 @@ class General(commands.Cog):
         )
         embed.add_field(
             name="🌐 Dashboard",
-            value="`/dashboard` — AI personality, toggles for starboard/sticky/verify/counting/music/…",
+            value="`/dashboard` — AI personality (drives TTS character voice), toggles…",
             inline=False,
         )
         embed.set_footer(text="OmniBot · Feature universe edition · prefix commands work for most actions")
