@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("omnibot")
 
-DEPLOY_MARKER = "2026-09-21-python-ai-music-dash-v3"
+DEPLOY_MARKER = "2026-09-21-feature-universe-v1"
 
 
 async def run() -> None:
