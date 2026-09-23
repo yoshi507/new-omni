@@ -79,6 +79,6 @@ async def fetch_user_guilds(access_token: str) -> list[dict[str, Any]]:
 
 
 def can_manage(guild: dict[str, Any]) -> bool:
+    """Dashboard manage access: Discord ADMINISTRATOR only (bit 0x8)."""
     perms = int(guild.get("permissions", 0) or 0)
-    # ADMINISTRATOR or MANAGE_GUILD
-    return bool(perms & 0x8) or bool(perms & 0x20)
+    return bool(perms & 0x8)

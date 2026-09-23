@@ -99,13 +99,11 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             member = g.get_member(int(user["id"]))
             if member is None:
                 member = await g.fetch_member(int(user["id"]))
-            if member and (
-                member.guild_permissions.administrator or member.guild_permissions.manage_guild
-            ):
+            if member and member.guild_permissions.administrator:
                 return
         except Exception as e:
             log.warning("Member fallback failed: %s", e)
-        raise HTTPException(403, "You cannot manage this server")
+        raise HTTPException(403, "Administrator permission required to manage this server")
 
     def _channels_payload(g) -> list[dict[str, Any]]:
         out = []
