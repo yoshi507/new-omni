@@ -1,4 +1,4 @@
-"""Groq chat completions with persona, model fallbacks, and friendly errors."""
+"""Groq chat completions with persona, per-user memory, and model fallbacks."""
 from __future__ import annotations
 
 import logging
@@ -15,7 +15,9 @@ log = logging.getLogger("omnibot.groq")
 DEFAULT_SYSTEM = (
     "You are OmniBot, a helpful Discord community assistant. "
     "Be clear, friendly, and concise. Use Discord-friendly formatting. "
-    "Do not claim to be human. Do not invent moderation actions."
+    "Do not claim to be human. Do not invent moderation actions. "
+    "If conversation history is provided, continue naturally from it — "
+    "do not re-introduce yourself or say hello every time unless the user greets you first."
 )
 
 FALLBACK_MODELS = [
@@ -25,6 +27,8 @@ FALLBACK_MODELS = [
     "gemma2-9b-it",
     "mixtral-8x7b-32768",
 ]
+
+MAX_HISTORY = 12
 
 
 def _persona_system(guild_id: int | str | None) -> str:
@@ -47,6 +51,59 @@ def _persona_system(guild_id: int | str | None) -> str:
     )
 
 
+def _memory_enabled(guild_id: int | str | None) -> bool:
+    if guild_id is None:
+        return False
+    data = storage.load_guild(guild_id)
+    dash = data.get("dashboard") or {}
+    ai_cfg = dash.get("ai") or {}
+    return bool(ai_cfg.get("memoryEnabled", True))
+
+
+def load_history(guild_id: int | str, user_id: int | str) -> list[dict[str, str]]:
+    """Load recent chat turns for this user in this guild."""
+    if not _memory_enabled(guild_id):
+        return []
+    data = storage.load_guild(guild_id)
+    mem = (data.get("memory") or {}).get(str(user_id)) or []
+    if not isinstance(mem, list):
+        return []
+    out: list[dict[str, str]] = []
+    for m in mem[-MAX_HISTORY:]:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        content = m.get("content")
+        if role in ("user", "assistant") and content:
+            out.append({"role": str(role), "content": str(content)[:4000]})
+    return out
+
+
+def save_turn(guild_id: int | str, user_id: int | str, user_msg: str, assistant_msg: str) -> None:
+    """Append a user+assistant turn to memory (if enabled)."""
+    if not _memory_enabled(guild_id):
+        return
+    uid = str(user_id)
+
+    def mut(d: dict) -> None:
+        root = d.setdefault("memory", {})
+        hist = list(root.get(uid) or [])
+        if not isinstance(hist, list):
+            hist = []
+        hist.append({"role": "user", "content": str(user_msg)[:4000]})
+        hist.append({"role": "assistant", "content": str(assistant_msg)[:4000]})
+        root[uid] = hist[-MAX_HISTORY:]
+
+    storage.update_guild(guild_id, mut)
+
+
+def clear_memory(guild_id: int | str, user_id: int | str) -> None:
+    def mut(d: dict) -> None:
+        (d.get("memory") or {}).pop(str(user_id), None)
+
+    storage.update_guild(guild_id, mut)
+
+
 def _models_to_try() -> list[str]:
     primary = (settings.groq_model or "").strip()
     out: list[str] = []
@@ -62,10 +119,12 @@ async def chat(
     guild_id: int | str | None,
     user_message: str,
     *,
+    user_id: int | str | None = None,
     history: list[dict[str, str]] | None = None,
     consume_quota: bool = True,
+    remember: bool = True,
 ) -> tuple[bool, str]:
-    """Returns (ok, text). On limit/config errors, ok=False with friendly message."""
+    """Returns (ok, text). Loads/saves per-user memory when user_id is set and remember=True."""
     key = (settings.groq_api_key or "").strip().strip('"').strip("'")
     if not key:
         return False, (
@@ -81,9 +140,13 @@ async def chat(
         if not ok:
             return False, msg or "AI limit reached."
 
+    hist: list[dict[str, str]] = list(history) if history is not None else []
+    if history is None and guild_id is not None and user_id is not None and remember:
+        hist = load_history(guild_id, user_id)
+
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
-    if history:
-        messages.extend(history[-12:])
+    if hist:
+        messages.extend(hist[-MAX_HISTORY:])
     messages.append({"role": "user", "content": user_message[:8000]})
 
     last_err = "Something went wrong with AI. Please try again."
@@ -158,6 +221,13 @@ async def chat(
                         ai_limits.consume(guild_id)
                     if model != (settings.groq_model or "").strip():
                         log.info("Groq succeeded with fallback model=%s", model)
+
+                    if remember and guild_id is not None and user_id is not None:
+                        try:
+                            save_turn(guild_id, user_id, user_message, text)
+                        except Exception as e:
+                            log.warning("Failed to save AI memory: %s", e)
+
                     return True, text
 
             return False, last_err
