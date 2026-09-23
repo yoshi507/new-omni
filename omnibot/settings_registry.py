@@ -1,4 +1,4 @@
-"""Dashboard settings definitions — expanded feature universe."""
+"""Dashboard settings definitions."""
 from __future__ import annotations
 
 from typing import Any
@@ -45,12 +45,6 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "verification.roleId", "path": "verification.roleId", "type": "role", "default": "", "category": "engagement"},
     {"id": "booster.enabled", "path": "booster.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "booster.channelId", "path": "booster.channelId", "type": "channel", "default": "", "category": "engagement"},
-    # Appeals
-    {"id": "appeals.enabled", "path": "appeals.enabled", "type": "bool", "default": False, "category": "appeals"},
-    {"id": "appeals.channelId", "path": "appeals.channelId", "type": "channel", "default": "", "category": "appeals"},
-    {"id": "appeals.cooldownHours", "path": "appeals.cooldownHours", "type": "number", "default": 24, "category": "appeals"},
-    {"id": "appeals.acceptMessage", "path": "appeals.acceptMessage", "type": "textarea", "default": "Your appeal was accepted.", "category": "appeals"},
-    {"id": "appeals.rejectMessage", "path": "appeals.rejectMessage", "type": "textarea", "default": "Your appeal was rejected.", "category": "appeals"},
     # Music
     {"id": "music.enabled", "path": "music.enabled", "type": "bool", "default": True, "category": "music"},
     {"id": "music.defaultVolume", "path": "music.defaultVolume", "type": "number", "default": 80, "category": "music"},
