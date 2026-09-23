@@ -82,18 +82,41 @@ class Events(commands.Cog):
                 minutes = max(5, int(dc.get("minutes") or 60))
                 threshold = minutes * 60
                 now = time.time()
-                last_map = dc.get("lastMessageAt") or {}
+                last_map = dict(dc.get("lastMessageAt") or {})
                 only = dc.get("channelId")
-                channel_ids = [str(only)] if only else list(last_map.keys())
+                if only:
+                    channel_ids = [str(only)]
+                else:
+                    channel_ids = list(last_map.keys())
+                    if not channel_ids:
+                        channel_ids = [
+                            str(c.id)
+                            for c in guild.text_channels
+                            if c.permissions_for(guild.me).send_messages
+                        ][:15]
+
                 for cid in channel_ids:
+                    if not cid:
+                        continue
                     key = f"{guild.id}:{cid}"
-                    if now - self._dead_cd.get(key, 0) < threshold:
+                    if now - self._dead_cd.get(key, 0) < min(threshold, 120):
                         continue
                     last = float(last_map.get(cid) or 0)
-                    if not last or (now - last) < threshold:
+                    if not last:
+                        def seed(d, _cid=cid, _now=now):
+                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[_cid] = _now
+                        storage.update_guild(guild.id, seed)
+                        last_map[cid] = now
                         continue
-                    ch = guild.get_channel(int(cid))
+                    if (now - last) < threshold:
+                        continue
+                    try:
+                        ch = guild.get_channel(int(cid))
+                    except (TypeError, ValueError):
+                        continue
                     if not isinstance(ch, discord.TextChannel):
+                        continue
+                    if not ch.permissions_for(guild.me).send_messages:
                         continue
                     pack_flags = dc.get("packFlags") or {}
                     packs = [k for k, v in pack_flags.items() if v] if pack_flags else (dc.get("packs") or ["general"])
