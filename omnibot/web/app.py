@@ -28,13 +28,6 @@ class SettingsPatch(BaseModel):
     patch: dict[str, Any]
 
 
-class AppealSubmit(BaseModel):
-    guild_id: str
-    punishment_type: str = "ban"
-    reason: str
-    extra: str = ""
-
-
 def create_app(bot, deploy_marker: str) -> FastAPI:
     app = FastAPI(title="OmniBot API", docs_url=None, redoc_url=None)
     app.state.bot = bot
@@ -90,6 +83,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         g = b.get_guild(int(gid))
         if not g:
             import asyncio as _asyncio
+
             await _asyncio.sleep(0.4)
             g = b.get_guild(int(gid))
         if not g:
@@ -422,83 +416,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
 
         storage.update_guild(guild_id, mut)
         return {"ok": True, "messageId": str(msg.id), "channelId": str(ch.id)}
-
-    @app.get("/appeals/servers")
-    async def appeals_servers():
-        b = app.state.bot
-        out = []
-        if b and b.is_ready():
-            for g in b.guilds:
-                data = storage.load_guild(g.id)
-                if (data.get("appeals") or {}).get("enabled"):
-                    icon = g.icon.url if g.icon else None
-                    out.append({"id": str(g.id), "name": g.name, "icon": icon})
-        return {"servers": out}
-
-    @app.post("/appeals/submit")
-    async def appeals_submit(body: AppealSubmit, request: Request):
-        user = session_user(request)
-        if not user:
-            raise HTTPException(401, "Login required to submit an appeal")
-        data = storage.load_guild(body.guild_id)
-        ap = data.get("appeals") or {}
-        if not ap.get("enabled"):
-            raise HTTPException(400, "Appeals are not enabled on that server")
-        import time, uuid
-
-        aid = str(uuid.uuid4())[:8]
-        record = {
-            "id": aid,
-            "userId": str(user["id"]),
-            "username": user.get("username"),
-            "punishment": body.punishment_type,
-            "reason": body.reason[:2000],
-            "extra": (body.extra or "")[:2000],
-            "status": "pending",
-            "createdAt": time.time(),
-        }
-
-        def mut(d):
-            recs = d.setdefault("appealsRecords", {})
-            recs[aid] = record
-
-        storage.update_guild(body.guild_id, mut)
-
-        b = app.state.bot
-        ch_id = ap.get("channelId")
-        if b and ch_id:
-            ch = b.get_channel(int(ch_id))
-            if ch:
-                try:
-                    await ch.send(
-                        f"**Appeal `{aid}`** from <@{user['id']}> ({user.get('username')})\n"
-                        f"Type: **{body.punishment_type}**\n"
-                        f"Reason: {body.reason[:1500]}"
-                    )
-                except Exception as e:
-                    log.warning("Could not post appeal: %s", e)
-        return {"ok": True, "appealId": aid}
-
-    @app.get("/advertise/list")
-    async def advertise_list():
-        b = app.state.bot
-        out = []
-        if b and b.is_ready():
-            for g in b.guilds:
-                data = storage.load_guild(g.id)
-                ad = data.get("advertise") or {}
-                if ad.get("listed"):
-                    out.append(
-                        {
-                            "id": str(g.id),
-                            "name": g.name,
-                            "icon": g.icon.url if g.icon else None,
-                            "description": ad.get("description", ""),
-                            "category": ad.get("category", "General"),
-                            "invite": ad.get("invite"),
-                        }
-                    )
-        return {"servers": out}
 
     public_dir = PUBLIC_DIR if PUBLIC_DIR.is_dir() else Path.cwd() / "public" / "dashboard"
     if public_dir.is_dir():
