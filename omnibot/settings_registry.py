@@ -30,7 +30,7 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "deadchat.channelId", "path": "deadChat.channelId", "type": "channel", "default": "", "category": "engagement"},
     {"id": "deadchat.message", "path": "deadChat.message", "type": "textarea", "default": "", "category": "engagement"},
     {"id": "leveling.enabled", "path": "levelSettings.enabled", "type": "bool", "default": True, "category": "engagement"},
-    {"id": "leveling.announce", "path": "levelSettings.announce", "type": "bool", "default": True, "category": "engagement"},
+    {"id": "leveling.announce", "path": "levelSettings.announce", "type": "bool", "default": False, "category": "engagement"},
     {"id": "autorole.enabled", "path": "autorole.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "autorole.roleId", "path": "autorole.roleId", "type": "role", "default": "", "category": "engagement"},
     {"id": "suggestions.enabled", "path": "suggestions.enabled", "type": "bool", "default": True, "category": "engagement"},
@@ -62,6 +62,7 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "tickets.enabled", "path": "tickets.enabled", "type": "bool", "default": False, "category": "tickets"},
     {"id": "tickets.categoryId", "path": "tickets.categoryId", "type": "text", "default": "", "category": "tickets"},
     {"id": "tickets.logChannelId", "path": "tickets.logChannelId", "type": "channel", "default": "", "category": "tickets"},
+    {"id": "tickets.panelChannelId", "path": "tickets.panelChannelId", "type": "channel", "default": "", "category": "tickets"},
     # Economy
     {"id": "economy.enabled", "path": "economy.enabled", "type": "bool", "default": True, "category": "fun"},
     # Temp voice
@@ -98,7 +99,6 @@ def validate_setting(defn: dict[str, Any], val: Any) -> tuple[bool, Any, str | N
             return False, None, f"Must be one of {opts}"
         return True, val, None
     if t in {"text", "textarea", "channel", "role"}:
-        # channel/role stored as snowflake strings; empty allowed
         s = "" if val is None else str(val).strip()
         return True, s, None
     return True, val, None
@@ -109,7 +109,6 @@ def get_defaults_flat() -> dict[str, Any]:
 
 
 def get_defaults_nested() -> dict[str, Any]:
-    """Build nested default guild data from SETTINGS paths."""
     root: dict[str, Any] = {}
     for s in SETTINGS:
         parts = s["path"].split(".")
