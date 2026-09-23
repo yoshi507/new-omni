@@ -11,6 +11,14 @@ from discord.ext import commands
 
 from omnibot import storage
 
+HONEYPOT_WARNING = (
+    "⚠️ **HONEYPOT CHANNEL** ⚠️\n\n"
+    "This channel is monitored.\n"
+    "**Anyone who sends a message here will be automatically banned.**\n\n"
+    "If you can see this and you are a normal member: **do not type anything.**\n"
+    "Leave this channel immediately."
+)
+
 
 class EngagementExtra(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -134,7 +142,6 @@ class EngagementExtra(commands.Cog):
                     await member.add_roles(*roles, reason="Sticky roles restore")
                 except Exception:
                     pass
-        # invite tracking
         guild = member.guild
         try:
             invs = await guild.invites()
@@ -173,11 +180,15 @@ class EngagementExtra(commands.Cog):
         await interaction.response.send_message("📨 Invite leaderboard\n" + "\n".join(lines))
 
     @inv.command(name="stats", description="Your invite stats")
-    async def invite_stats(self, interaction: discord.Interaction, member: discord.Member | None = None):
+    async def invite_stats(
+        self, interaction: discord.Interaction, member: discord.Member | None = None
+    ):
         m = member or interaction.user
         data = storage.load_guild(interaction.guild.id)
         v = (data.get("invites") or {}).get(str(m.id)) or {"joins": 0}
-        await interaction.response.send_message(f"**{m.display_name}** invited **{v.get('joins', 0)}** members.")
+        await interaction.response.send_message(
+            f"**{m.display_name}** invited **{v.get('joins', 0)}** members."
+        )
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -198,7 +209,12 @@ class EngagementExtra(commands.Cog):
     @app_commands.checks.has_permissions(manage_channels=True)
     async def counting_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
         def mut(d):
-            d["counting"] = {"enabled": True, "channelId": str(channel.id), "next": 1, "lastUser": None}
+            d["counting"] = {
+                "enabled": True,
+                "channelId": str(channel.id),
+                "next": 1,
+                "lastUser": None,
+            }
 
         storage.update_guild(interaction.guild.id, mut)
         self._counting_expect[channel.id] = 1
@@ -208,7 +224,12 @@ class EngagementExtra(commands.Cog):
     @app_commands.checks.has_permissions(manage_channels=True)
     async def wordchain_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
         def mut(d):
-            d["wordchain"] = {"enabled": True, "channelId": str(channel.id), "lastWord": "", "lastUser": None}
+            d["wordchain"] = {
+                "enabled": True,
+                "channelId": str(channel.id),
+                "lastWord": "",
+                "lastUser": None,
+            }
 
         storage.update_guild(interaction.guild.id, mut)
         self._wordchain_last.pop(channel.id, None)
@@ -236,7 +257,9 @@ class EngagementExtra(commands.Cog):
         message: str = "Click the button below to verify and gain access.",
     ):
         view = discord.ui.View(timeout=None)
-        btn = discord.ui.Button(label="Verify", style=discord.ButtonStyle.success, custom_id="omnibot:verify")
+        btn = discord.ui.Button(
+            label="Verify", style=discord.ButtonStyle.success, custom_id="omnibot:verify"
+        )
         view.add_item(btn)
         emb = discord.Embed(title="Verification", description=message, color=0x3DD68C)
         msg = await channel.send(embed=emb, view=view)
@@ -263,7 +286,9 @@ class EngagementExtra(commands.Cog):
         data = storage.load_guild(interaction.guild.id)
         v = data.get("verification") or {}
         if not v.get("enabled") or not v.get("roleId"):
-            return await interaction.response.send_message("Verification not configured.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Verification not configured.", ephemeral=True
+            )
         role = interaction.guild.get_role(int(v["roleId"]))
         if not role:
             return await interaction.response.send_message("Verify role missing.", ephemeral=True)
@@ -273,16 +298,51 @@ class EngagementExtra(commands.Cog):
         except Exception as e:
             await interaction.response.send_message(f"Failed: {e}", ephemeral=True)
 
-    @engage.command(name="honeypot-setup", description="Mark a channel as honeypot (auto-ban on message)")
+    @engage.command(
+        name="honeypot-setup",
+        description="Mark a channel as honeypot (auto-ban on message) and post a warning",
+    )
     @app_commands.checks.has_permissions(ban_members=True)
-    async def honeypot_setup(self, interaction: discord.Interaction, channel: discord.TextChannel, enabled: bool = True):
+    async def honeypot_setup(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        enabled: bool = True,
+    ):
         def mut(d):
             d["honeypot"] = {"enabled": enabled, "channelId": str(channel.id)}
 
         storage.update_guild(interaction.guild.id, mut)
-        await interaction.response.send_message(
-            f"Honeypot {'enabled' if enabled else 'disabled'} on {channel.mention}.", ephemeral=True
-        )
+
+        if enabled:
+            emb = discord.Embed(
+                title="⚠️ HONEYPOT CHANNEL",
+                description=(
+                    "This channel is a **trap for raiders and spam bots**.\n\n"
+                    "**Anyone who sends a message here will be automatically banned.**\n\n"
+                    "If you are a normal member and can see this: **do not type anything.** "
+                    "Leave this channel."
+                ),
+                color=0xF04438,
+            )
+            emb.set_footer(text="OmniBot honeypot · messages here = ban")
+            try:
+                await channel.send(embed=emb)
+            except Exception as e:
+                await interaction.response.send_message(
+                    f"Honeypot enabled on {channel.mention}, but could not post warning: {e}",
+                    ephemeral=True,
+                )
+                return
+            await interaction.response.send_message(
+                f"Honeypot **enabled** on {channel.mention}. Warning message posted.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                f"Honeypot **disabled** on {channel.mention}.",
+                ephemeral=True,
+            )
 
     @engage.command(name="booster-setup", description="Celebrate server boosts in a channel")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -302,14 +362,16 @@ class EngagementExtra(commands.Cog):
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         if before.premium_since == after.premium_since:
             return
-        if after.premium_since and (not before.premium_since or after.premium_since > before.premium_since):
+        if after.premium_since and (
+            not before.premium_since or after.premium_since > before.premium_since
+        ):
             data = storage.load_guild(after.guild.id)
             b = data.get("booster") or {}
             if not b.get("enabled") or not b.get("channelId"):
                 return
             ch = after.guild.get_channel(int(b["channelId"]))
             if isinstance(ch, discord.TextChannel):
-                msg = (b.get("message") or "🚀 {user} boosted!")
+                msg = b.get("message") or "🚀 {user} boosted!"
                 msg = msg.replace("{user}", after.mention).replace("{username}", after.name)
                 try:
                     await ch.send(msg)
@@ -327,19 +389,30 @@ class EngagementExtra(commands.Cog):
         if message.author.id in self._afk.get(gid, {}):
             self._afk[gid].pop(message.author.id, None)
             try:
-                await message.channel.send(f"Welcome back {message.author.mention} — AFK removed.", delete_after=8)
+                await message.channel.send(
+                    f"Welcome back {message.author.mention} — AFK removed.", delete_after=8
+                )
             except Exception:
                 pass
         for m in message.mentions:
             reason = self._afk.get(gid, {}).get(m.id)
             if reason:
                 try:
-                    await message.channel.send(f"{m.display_name} is AFK: {reason}", delete_after=12)
+                    await message.channel.send(
+                        f"{m.display_name} is AFK: {reason}", delete_after=12
+                    )
                 except Exception:
                     pass
 
         hp = data.get("honeypot") or {}
         if hp.get("enabled") and str(cid) == str(hp.get("channelId")):
+            # Don't ban staff / people with ban perms (avoid self-ban accidents)
+            if isinstance(message.author, discord.Member):
+                if (
+                    message.author.guild_permissions.ban_members
+                    or message.author.guild_permissions.administrator
+                ):
+                    return
             try:
                 await message.author.ban(reason="Honeypot channel", delete_message_days=0)
             except Exception:
@@ -392,7 +465,9 @@ class EngagementExtra(commands.Cog):
                 return
             last = (wc.get("lastWord") or "").lower()
             last_user = wc.get("lastUser")
-            if last and (not word.startswith(last[-1]) or str(message.author.id) == str(last_user)):
+            if last and (
+                not word.startswith(last[-1]) or str(message.author.id) == str(last_user)
+            ):
                 try:
                     await message.delete()
                 except Exception:
