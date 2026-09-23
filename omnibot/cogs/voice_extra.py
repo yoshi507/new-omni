@@ -24,7 +24,7 @@ class VoiceExtra(commands.Cog):
     voice = app_commands.Group(name="voice", description="Voice utilities & AI speech")
 
     @voice.command(name="setup-join-to-create", description="Set a lobby channel that creates temp voice rooms")
-    @app_commands.checks.has_permissions(manage_channels=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def setup_jtc(self, interaction: discord.Interaction, lobby: discord.VoiceChannel):
         def mut(d):
             d.setdefault("tempVoice", {})["lobbyChannelId"] = str(lobby.id)
@@ -110,7 +110,6 @@ class VoiceExtra(commands.Cog):
         audio_path: Path | None = None
         done = asyncio.Event()
         vc = None
-        # Hold global/guild slots only while generating (not during long playback)
         async with concurrency.guild_slot(gid):
             ok_lim, lim_msg = ai_limits.can_use(gid)
             if not ok_lim:
@@ -181,7 +180,6 @@ class VoiceExtra(commands.Cog):
                 f"🔊 **Speaking** ({voice_label}) · AI {u['count']}/{u['limit']}\n> {preview}"
             )
 
-        # Playback continues without holding the global pool
         try:
             await asyncio.wait_for(done.wait(), timeout=120)
         except asyncio.TimeoutError:
