@@ -1,8 +1,9 @@
-"""Music — YouTube (and SoundCloud) via yt-dlp + FFmpeg."""
+"""Music — SoundCloud-first + YouTube via yt-dlp with anti-bot client fallbacks."""
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 import discord
@@ -14,21 +15,46 @@ from omnibot.services import concurrency
 log = logging.getLogger("omnibot.music")
 _executor = ThreadPoolExecutor(max_workers=2)
 
-YDL_OPTS = {
-    "format": "bestaudio/best",
-    "quiet": True,
-    "no_warnings": True,
-    "default_search": "ytsearch",
-    "noplaylist": True,
-    "source_address": "0.0.0.0",
-    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
-}
+# Multiple YouTube clients — android/ios/tv often avoid the "sign in" bot wall
+_YT_CLIENTS = [
+    ["android", "ios", "tv_embedded", "mweb", "web"],
+    ["ios", "android"],
+    ["tv_embedded"],
+]
 
 
-def _extract(query: str) -> dict:
+def _base_opts(clients: list[str]) -> dict:
+    opts: dict = {
+        "format": "bestaudio/best",
+        "quiet": True,
+        "no_warnings": True,
+        "default_search": "ytsearch",
+        "noplaylist": True,
+        "source_address": "0.0.0.0",
+        "extractor_args": {"youtube": {"player_client": clients}},
+        # Prefer not to download whole file
+        "skip_download": True,
+    }
+    cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
+    if cookies and os.path.isfile(cookies):
+        opts["cookiefile"] = cookies
+    return opts
+
+
+def _pick_stream(info: dict) -> str | None:
+    url = info.get("url")
+    if url:
+        return url
+    for f in reversed(info.get("formats") or []):
+        if f.get("url") and (f.get("acodec") or "none") != "none":
+            return f["url"]
+    return info.get("webpage_url")
+
+
+def _extract_once(query: str, opts: dict) -> dict:
     import yt_dlp
 
-    with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+    with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(query, download=False)
         if info is None:
             raise RuntimeError("No results")
@@ -37,20 +63,55 @@ def _extract(query: str) -> dict:
             if not entries:
                 raise RuntimeError("No search results")
             info = entries[0]
-        url = info.get("url") or info.get("webpage_url")
-        if not url:
+        stream = _pick_stream(info)
+        if not stream:
             raise RuntimeError("No stream URL")
-        if not info.get("url") and info.get("formats"):
-            for f in reversed(info["formats"]):
-                if f.get("url") and (f.get("acodec") or "none") != "none":
-                    url = f["url"]
-                    break
         return {
             "title": info.get("title") or query,
-            "url": info.get("url") or url,
+            "url": stream,
             "webpage": info.get("webpage_url") or query,
             "duration": info.get("duration"),
         }
+
+
+def _extract(query: str) -> dict:
+    q = query.strip()
+    low = q.lower()
+    errors: list[str] = []
+
+    # Prefer SoundCloud if user pasted a SC link
+    if "soundcloud.com" in low:
+        try:
+            return _extract_once(q, {**_base_opts(["web"]), "default_search": "scsearch"})
+        except Exception as e:
+            errors.append(f"soundcloud:{e}")
+
+    # Direct YouTube URL or generic search — try several client stacks
+    for clients in _YT_CLIENTS:
+        try:
+            return _extract_once(q, _base_opts(clients))
+        except Exception as e:
+            errors.append(f"yt:{'+'.join(clients)}:{e}")
+            continue
+
+    # Last resort: SoundCloud search for plain text queries
+    if not any(x in low for x in ("youtube.com", "youtu.be", "soundcloud.com")):
+        try:
+            return _extract_once(
+                q,
+                {
+                    **_base_opts(["web"]),
+                    "default_search": "scsearch",
+                },
+            )
+        except Exception as e:
+            errors.append(f"scsearch:{e}")
+
+    raise RuntimeError(
+        "Could not resolve track (YouTube bot-check / region). "
+        "Try a SoundCloud URL, or set YTDLP_COOKIES to a cookies.txt path. "
+        f"Details: {errors[-1] if errors else 'unknown'}"
+    )
 
 
 class GuildPlayer:
@@ -98,10 +159,7 @@ class Music(commands.Cog):
             return
         item = gp.queue.pop(0)
         try:
-            if item.get("webpage") and (
-                "youtube" in str(item.get("webpage", "")).lower()
-                or "youtu.be" in str(item.get("webpage", "")).lower()
-            ):
+            if item.get("webpage"):
                 try:
                     fresh = await self._resolve(item["webpage"])
                     item["url"] = fresh["url"]
@@ -115,10 +173,10 @@ class Music(commands.Cog):
             log.error("Next track failed: %s", e)
             await self._play_next(guild_id)
 
-    music = app_commands.Group(name="music", description="Music controls (YouTube + SoundCloud)")
+    music = app_commands.Group(name="music", description="Music controls (SoundCloud + YouTube)")
 
-    @music.command(name="play", description="Play from YouTube URL or search")
-    @app_commands.describe(query="YouTube URL, SoundCloud URL, or search terms")
+    @music.command(name="play", description="Play from URL or search (SoundCloud preferred if YT blocks)")
+    @app_commands.describe(query="SoundCloud/YouTube URL or search terms")
     async def play(self, interaction: discord.Interaction, query: str):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Guild only.", ephemeral=True)
@@ -128,7 +186,6 @@ class Music(commands.Cog):
             )
 
         await interaction.response.defer()
-        # Queue on global (max 4) + this guild (max 1) — waits instead of rejecting
         async with concurrency.guild_slot(interaction.guild.id):
             gp = self._gp(interaction.guild.id)
             channel = interaction.user.voice.channel
@@ -146,7 +203,9 @@ class Music(commands.Cog):
             except Exception as e:
                 log.exception("Resolve failed")
                 return await interaction.followup.send(
-                    f"❌ Could not find that track ({e}). Try a YouTube URL or different search."
+                    f"❌ Could not find that track.\n{e}\n"
+                    f"Tip: paste a **SoundCloud** link, or ask the host to set **YTDLP_COOKIES** "
+                    f"to a Netscape cookies.txt exported while logged into YouTube."
                 )
 
             title = track["title"]

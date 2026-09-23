@@ -7,12 +7,21 @@ import time
 from collections import defaultdict
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from omnibot import storage
 from omnibot.services import groq_client
 
 NATURAL = re.compile(r"^(?:omni(?:bot)?)(?:\s+|[,:]\s*)(.+)$", re.I)
+
+DEAD_CHAT_PROMPTS = [
+    "Anyone still around? Drop a 👋 if you're here!",
+    "Chat's been quiet… what's everyone up to?",
+    "Dead chat? Not on my watch. Say hi!",
+    "Random question: coffee or tea?",
+    "Bump! What's the best thing that happened today?",
+    "Hey {server} — let's get this chat moving again 🔥",
+]
 
 
 class Events(commands.Cog):
@@ -20,6 +29,11 @@ class Events(commands.Cog):
         self.bot = bot
         self._spam: dict[str, list[float]] = defaultdict(list)
         self._xp_cd: dict[str, float] = {}
+        self._dead_cd: dict[str, float] = {}
+        self.deadchat_loop.start()
+
+    def cog_unload(self):
+        self.deadchat_loop.cancel()
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -64,6 +78,58 @@ class Events(commands.Cog):
                     await ch.send(msg)
                 except Exception:
                     pass
+
+    @tasks.loop(minutes=2)
+    async def deadchat_loop(self):
+        for guild in list(self.bot.guilds):
+            try:
+                data = storage.load_guild(guild.id)
+                dc = data.get("deadChat") or {}
+                if not dc.get("enabled"):
+                    continue
+                minutes = max(5, int(dc.get("minutes") or 60))
+                threshold = minutes * 60
+                now = time.time()
+                last_map = dc.get("lastMessageAt") or {}
+                channel_ids = []
+                only = dc.get("channelId")
+                if only:
+                    channel_ids = [str(only)]
+                else:
+                    channel_ids = list(last_map.keys())
+                for cid in channel_ids:
+                    key = f"{guild.id}:{cid}"
+                    if now - self._dead_cd.get(key, 0) < threshold:
+                        continue
+                    last = float(last_map.get(cid) or 0)
+                    if last and (now - last) < threshold:
+                        continue
+                    # Never messaged in this channel since enable — skip until first human msg
+                    if not last:
+                        continue
+                    ch = guild.get_channel(int(cid))
+                    if not isinstance(ch, discord.TextChannel):
+                        continue
+                    prompt = random.choice(DEAD_CHAT_PROMPTS).replace("{server}", guild.name)
+                    custom = (dc.get("message") or "").strip()
+                    if custom:
+                        prompt = custom.replace("{server}", guild.name)
+                    try:
+                        await ch.send(prompt)
+                        self._dead_cd[key] = now
+
+                        def mut(d):
+                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[cid] = time.time()
+
+                        storage.update_guild(guild.id, mut)
+                    except Exception:
+                        pass
+            except Exception:
+                continue
+
+    @deadchat_loop.before_loop
+    async def before_deadchat(self):
+        await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -124,23 +190,27 @@ class Events(commands.Cog):
                 self._xp_cd[cd_key] = time.time()
                 xmin, xmax = int(ls.get("xpMin") or 15), int(ls.get("xpMax") or 25)
                 gain = random.randint(min(xmin, xmax), max(xmin, xmax))
+                leveled_to: int | None = None
 
                 def mut_xp(d):
+                    nonlocal leveled_to
                     lv = d.setdefault("levels", {}).setdefault(
                         str(message.author.id), {"xp": 0, "level": 0}
                     )
+                    # scrub old bug flag if present
+                    d.pop("_levelup", None)
                     lv["xp"] = int(lv.get("xp") or 0) + gain
                     need = 100 + int(lv.get("level") or 0) * 50
                     if lv["xp"] >= need:
                         lv["xp"] -= need
                         lv["level"] = int(lv.get("level") or 0) + 1
-                        d["_levelup"] = lv["level"]
+                        leveled_to = lv["level"]
 
-                data2 = storage.update_guild(message.guild.id, mut_xp)
-                if data2.get("_levelup") and ls.get("announce", True):
+                storage.update_guild(message.guild.id, mut_xp)
+                if leveled_to is not None and ls.get("announce", True):
                     try:
                         await message.channel.send(
-                            f"🎉 {message.author.mention} reached level **{data2['_levelup']}**!"
+                            f"🎉 {message.author.mention} reached level **{leveled_to}**!"
                         )
                     except Exception:
                         pass
