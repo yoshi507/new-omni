@@ -270,19 +270,26 @@ async function loadGuilds() {
   const data = await api('/guilds');
   S.guilds = data.guilds || [];
 }
+let _opening = false;
 async function openGuild(id, name) {
-  S.guildId = id; S.guildName = name || id;
-  const [s, bot, ch, roles] = await Promise.all([
-    api(`/guilds/${id}/settings`),
-    api(`/guilds/${id}/bot`),
-    api(`/guilds/${id}/channels`).catch(() => ({channels:[]})),
-    api(`/guilds/${id}/roles`).catch(() => ({roles:[]})),
-  ]);
-  S.settings = s.settings || {};
-  S.bot = bot || {};
-  S.channels = ch.channels || [];
-  S.roles = roles.roles || [];
-  setView('overview');
+  if (_opening) return;
+  _opening = true;
+  try {
+    S.guildId = id; S.guildName = name || id;
+    toast('Loading server…');
+    const data = await api(`/guilds/${id}/bundle`);
+    S.settings = data.settings || {};
+    S.bot = data.bot || {};
+    S.channels = data.channels || [];
+    S.roles = data.roles || [];
+    toast(`Loaded ${S.channels.length} channels · ${S.roles.length} roles`);
+    setView('overview');
+  } catch (e) {
+    toast(e.message || 'Failed to open server');
+    console.error(e);
+  } finally {
+    _opening = false;
+  }
 }
 function renderServers() {
   if (!S.guilds.length) {
@@ -291,7 +298,7 @@ function renderServers() {
       <a class="btn btn-primary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank">Add to Discord</a></div>`;
   }
   return `<div class="grid">${S.guilds.map(g => `
-    <div class="server-card" data-id="${g.id}" data-name="${g.name.replace(/"/g,'"')}">
+    <div class="server-card" data-id="${g.id}" data-name="${String(g.name||'').replace(/"/g,'&quot;')}">
       ${g.icon ? `<img src="${g.icon}" alt="">` : `<div class="avatar"></div>`}
       <div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div>
     </div>`).join('')}</div>`;
@@ -306,13 +313,15 @@ function renderOverview() {
       <div class="stat"><div class="label">Server</div><div class="value" style="font-size:1.1rem">${S.guildName}</div></div>
     </div>
     <div class="card" style="margin-top:16px"><h3>Quick tip</h3>
-      <p class="desc">Use the sidebar to configure AI personality, moderation, welcomes, appeals and music. Channel dropdowns load from Discord.</p></div>`;
+      <p class="desc">Use the sidebar to configure AI, moderation, welcomes, tickets, and voice. Channel dropdowns load from Discord.</p>
+      <p class="desc">Channels loaded: <strong>${(S.channels||[]).length}</strong> · Roles: <strong>${(S.roles||[]).length}</strong></p></div>`;
 }
 function channelOptions(selected) {
   const opts = [`<option value="">— none —</option>`];
   for (const c of (S.channels||[])) {
     const sel = String(selected||'') === String(c.id) ? 'selected' : '';
-    opts.push(`<option value="${c.id}" ${sel}>#${c.name} (${c.type||'channel'})</option>`);
+    const safe = String(c.name||'').replace(/</g,'&lt;');
+    opts.push(`<option value="${c.id}" ${sel}>#${safe} (${c.type||'channel'})</option>`);
   }
   return opts.join('');
 }
@@ -321,7 +330,8 @@ function roleOptions(selected) {
   for (const r of (S.roles||[])) {
     if (r.name === '@everyone') continue;
     const sel = String(selected||'') === String(r.id) ? 'selected' : '';
-    opts.push(`<option value="${r.id}" ${sel}>@${r.name}</option>`);
+    const safe = String(r.name||'').replace(/</g,'&lt;');
+    opts.push(`<option value="${r.id}" ${sel}>@${safe}</option>`);
   }
   return opts.join('');
 }
@@ -347,15 +357,14 @@ function renderSettings(keys) {
     }
     return `<label class="field">${f.label}<input data-id="${f.id}" type="${f.type==='number'?'number':'text'}" value="${val ?? ''}"></label>`;
   }).join('');
-  return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Settings apply only to this server. Channel/role dropdowns load from Discord.</p>${rows}
+  return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Settings apply only to this server. Channel/role dropdowns load from Discord (${(S.channels||[]).length} channels, ${(S.roles||[]).length} roles).</p>${rows}
     <button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button></div>`;
 }
 async function renderAppealPortal() {
   let servers = [];
   try { servers = (await api('/appeals/servers')).servers || []; } catch {}
   return `<div class="card"><h3>Appeal a punishment</h3>
-    <p class="desc">Choose a server with appeals enabled. You must be logged in.</p>
-    <input id="appeal-search" placeholder="Search servers…" style="width:100%;margin-bottom:12px;background:#0c0f16;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:11px 12px">
+    <p class="desc">Choose a server with appeals enabled.</p>
     <div id="appeal-list" class="grid">${servers.map(s=>`
       <div class="server-card appeal-pick" data-id="${s.id}">
         ${s.icon?`<img src="${s.icon}">`:`<div class="avatar"></div>`}
@@ -392,7 +401,7 @@ async function render() {
 }
 function bind() {
   document.querySelectorAll('.server-card[data-id]:not(.appeal-pick)').forEach(el => {
-    el.onclick = () => openGuild(el.dataset.id, el.dataset.name).catch(e => toast(e.message));
+    el.onclick = () => openGuild(el.dataset.id, el.dataset.name);
   });
   document.querySelectorAll('.switch[data-id]').forEach(el => {
     el.onclick = () => el.classList.toggle('on');
@@ -403,6 +412,8 @@ function bind() {
     document.querySelectorAll('[data-id]').forEach(el => {
       const id = el.dataset.id;
       if (el.classList.contains('switch')) patch[id] = el.classList.contains('on');
+      else if (el.tagName === 'SELECT') patch[id] = el.value;
+      else if (el.type === 'number') patch[id] = Number(el.value);
       else patch[id] = el.value;
     });
     try {
@@ -453,7 +464,7 @@ document.getElementById('btn-advertise-home').onclick = async () => {
   } catch { document.getElementById('bot-status').innerHTML = '<i></i> API unreachable'; }
   if (await refreshAuth()) {
     showLanding(false);
-    try { await loadGuilds(); } catch {}
+    try { await loadGuilds(); } catch (e) { toast(e.message); }
     setView('servers');
   } else showLanding(true);
 })();
