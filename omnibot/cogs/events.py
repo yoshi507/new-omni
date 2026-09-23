@@ -95,7 +95,11 @@ class Events(commands.Cog):
                     ch = guild.get_channel(int(cid))
                     if not isinstance(ch, discord.TextChannel):
                         continue
-                    question = pick_question(dc.get("packs"), dc.get("customQuestions"))
+                    pack_flags = dc.get("packFlags") or {}
+                    packs = [k for k, v in pack_flags.items() if v] if pack_flags else (dc.get("packs") or ["general"])
+                    if not packs:
+                        packs = ["general"]
+                    question = pick_question(packs, None)
                     emb = discord.Embed(
                         title="💬 Chat's been quiet…",
                         description=question,

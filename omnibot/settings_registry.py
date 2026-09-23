@@ -28,7 +28,14 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "deadchat.enabled", "path": "deadChat.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "deadchat.minutes", "path": "deadChat.minutes", "type": "number", "default": 60, "category": "engagement"},
     {"id": "deadchat.channelId", "path": "deadChat.channelId", "type": "channel", "default": "", "category": "engagement"},
-    {"id": "deadchat.message", "path": "deadChat.message", "type": "textarea", "default": "", "category": "engagement"},
+    {"id": "deadchat.pack.general", "path": "deadChat.packFlags.general", "type": "bool", "default": True, "category": "engagement"},
+    {"id": "deadchat.pack.fun", "path": "deadChat.packFlags.fun", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.gaming", "path": "deadChat.packFlags.gaming", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.anime", "path": "deadChat.packFlags.anime", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.science", "path": "deadChat.packFlags.science", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.facts", "path": "deadChat.packFlags.facts", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.music", "path": "deadChat.packFlags.music", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "deadchat.pack.movies", "path": "deadChat.packFlags.movies", "type": "bool", "default": False, "category": "engagement"},
     {"id": "leveling.enabled", "path": "levelSettings.enabled", "type": "bool", "default": True, "category": "engagement"},
     {"id": "leveling.announce", "path": "levelSettings.announce", "type": "bool", "default": False, "category": "engagement"},
     {"id": "autorole.enabled", "path": "autorole.enabled", "type": "bool", "default": False, "category": "engagement"},
@@ -42,6 +49,7 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "wordchain.enabled", "path": "wordchain.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "wordchain.channelId", "path": "wordchain.channelId", "type": "channel", "default": "", "category": "engagement"},
     {"id": "verification.enabled", "path": "verification.enabled", "type": "bool", "default": False, "category": "engagement"},
+    {"id": "verification.channelId", "path": "verification.channelId", "type": "channel", "default": "", "category": "engagement"},
     {"id": "verification.roleId", "path": "verification.roleId", "type": "role", "default": "", "category": "engagement"},
     {"id": "booster.enabled", "path": "booster.enabled", "type": "bool", "default": False, "category": "engagement"},
     {"id": "booster.channelId", "path": "booster.channelId", "type": "channel", "default": "", "category": "engagement"},
@@ -124,7 +132,7 @@ def get_defaults_nested() -> dict[str, Any]:
     root.setdefault("counting", {"enabled": False, "next": 1})
     root.setdefault("wordchain", {"enabled": False})
     root.setdefault("starboard", {"enabled": False})
-    root.setdefault("deadChat", {"enabled": False, "minutes": 60, "lastMessageAt": {}})
+    root.setdefault("deadChat", {"enabled": False, "minutes": 60, "lastMessageAt": {}, "packFlags": {"general": True}})
     root.setdefault("tempVoice", {"enabled": False, "lobbyChannelId": ""})
     root.setdefault("tickets", {"enabled": False, "staffRoleId": "", "buttons": []})
     return root
