@@ -41,7 +41,7 @@ PACKS: dict[str, list[str]] = {
         "Favourite genre right now — FPS, RPG, strategy, or indie?",
         "What's a game you keep coming back to?",
         "Best soundtrack in a game?",
-        "Controller or keyboard & mouse?",
+        "Controller or keyboard and mouse?",
         "What's a game that made you emotional?",
         "Co-op or competitive — which do you prefer?",
         "Most underrated game you've played?",
@@ -55,12 +55,12 @@ PACKS: dict[str, list[str]] = {
     ],
     "anime": [
         "What was your gateway anime?",
-        "Favourite anime genre — shonen, slice of life, mecha, romance…?",
+        "Favourite anime genre — shonen, slice of life, mecha, romance?",
         "Best anime opening of all time?",
         "Character you'd want as a best friend?",
         "Overrated anime hot take?",
         "Manga or anime first?",
-        "Favourite studio (MAPPA, Ufotable, Kyoto Animation…)?",
+        "Favourite studio (MAPPA, Ufotable, Kyoto Animation)?",
         "Which anime world would you least want to live in?",
         "Best villain in anime?",
         "Slice of life comfort watch?",
@@ -96,7 +96,7 @@ PACKS: dict[str, list[str]] = {
         "What's a myth people still believe?",
         "Share a weird history fact.",
         "What's something most people get wrong about your hobby?",
-        "Favourite "did you know…" fact?",
+        "Favourite did-you-know fact?",
         "What's a food origin fact you find interesting?",
         "Language fact: share a word you love from another language.",
         "Animal fact time — drop one!",
@@ -132,13 +132,13 @@ PACKS: dict[str, list[str]] = {
 
 PACK_LABELS = {
     "general": "General icebreakers",
-    "fun": "Fun & chaotic",
+    "fun": "Fun and chaotic",
     "gaming": "Gaming",
     "anime": "Anime",
     "science": "Science",
     "facts": "Fun facts",
     "music": "Music",
-    "movies": "Movies & TV",
+    "movies": "Movies and TV",
 }
 
 
@@ -147,7 +147,6 @@ def list_packs() -> list[str]:
 
 
 def questions_for_packs(pack_ids: list[str] | None) -> list[str]:
-    """Collect questions from selected packs (default: general)."""
     if not pack_ids:
         pack_ids = ["general"]
     out: list[str] = []
