@@ -4,13 +4,14 @@
 :root{--bg:#0b0d12;--sidebar:#0e1118;--panel:#141824;--panel2:#1a1f2e;--border:#252b3b;--text:#eef0f6;--muted:#8b93a7;--accent:#5b6cff;--ok:#3dd68c;--danger:#f04438;--radius:14px}
 *{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text)}a{color:var(--accent);text-decoration:none}button,input,select,textarea{font:inherit}
 .btn{appearance:none;border:0;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px}.btn-primary{background:var(--accent);color:#fff}.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}.btn-ghost{background:var(--panel2);color:var(--text)}
-.landing{min-height:100%;display:flex;flex-direction:column}.landing-nav{display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--border)}
+.landing{min-height:100%;display:flex;flex-direction:column}
+.landing-nav{display:flex;justify-content:center;align-items:center;padding:20px 28px;border-bottom:1px solid var(--border)}
 .brand{font-weight:800;font-size:1.25rem}.brand span{color:var(--accent)}
 .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 20px}
 .hero h1{font-size:clamp(2rem,5vw,3.2rem);margin:0 0 12px}.hero p{color:var(--muted);max-width:540px;line-height:1.6;margin:0 0 28px}
 .hero-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .status-dot{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--muted)}.status-dot i{width:8px;height:8px;border-radius:50%;background:#555}.status-dot.ok i{background:var(--ok)}
-.landing-footer{padding:20px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;gap:16px}
+.landing-footer{padding:20px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;gap:16px;justify-content:center}
 .app{display:none;height:100vh}.app.on{display:grid;grid-template-columns:260px 1fr}
 .sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 14px}
 .side-brand{font-weight:800;padding:6px 10px 18px}.side-brand span{color:var(--accent)}
@@ -35,13 +36,16 @@ label.field textarea{min-height:100px;resize:vertical}
 @media(max-width:860px){.app.on{grid-template-columns:1fr}.sidebar{position:fixed;inset:0 auto 0 0;width:min(280px,85vw);z-index:40;transform:translateX(-105%)}.sidebar.open{transform:none}.menu-btn{display:inline-flex!important}}
 </style></head><body>
 <div id="landing" class="landing">
-  <div class="landing-nav"><div class="brand">Omni<span>Bot</span></div>
-    <div style="display:flex;gap:10px"><a class="btn btn-secondary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank">Add to Discord</a>
-    <a class="btn btn-primary" href="/auth/login">Open dashboard</a></div></div>
-  <div class="hero"><h1>Control every server<br/>from one dashboard</h1>
+  <div class="landing-nav"><div class="brand">Omni<span>Bot</span></div></div>
+  <div class="hero">
+    <h1>Control every server<br/>from one dashboard</h1>
     <p>AI, moderation, music, economy and more — configured live.</p>
-    <div class="hero-actions"><a class="btn btn-primary" href="/auth/login">Open dashboard</a></div>
-    <div class="status-dot" id="bot-status"><i></i> Checking…</div></div>
+    <div class="hero-actions">
+      <a class="btn btn-secondary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank" rel="noopener">Add to Discord</a>
+      <a class="btn btn-primary" href="/auth/login">Open dashboard</a>
+    </div>
+    <div class="status-dot" id="bot-status"><i></i> Checking…</div>
+  </div>
   <div class="landing-footer"><a href="/tos">Terms</a><a href="/privacy-policy">Privacy</a></div>
 </div>
 <div id="app" class="app">
@@ -88,7 +92,7 @@ function setView(view){S.view=view;document.querySelectorAll('.side-nav button')
 async function loadGuilds(){const data=await api('/guilds');S.guilds=data.guilds||[]}
 let _opening=false;
 async function openGuild(id,name){if(_opening)return;_opening=true;try{S.guildId=id;S.guildName=name||id;toast('Loading server…');const data=await api(`/guilds/${id}/bundle`);S.settings=data.settings||{};S.bot=data.bot||{};S.channels=data.channels||[];S.roles=data.roles||[];toast(`Loaded ${S.channels.length} channels · ${S.roles.length} roles`);setView('overview')}catch(e){toast(e.message||'Failed')}finally{_opening=false}}
-function renderServers(){if(!S.guilds.length)return `<div class="card"><h3>No servers yet</h3><p class="desc">Add OmniBot where you have Manage Server.</p></div>`;return `<div class="grid">${S.guilds.map(g=>`<div class="server-card" data-id="${g.id}" data-name="${String(g.name||'').replace(/"/g,'"')}">${g.icon?`<img src="${g.icon}">`:`<div class="avatar"></div>`}<div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div></div>`).join('')}</div>`}
+function renderServers(){if(!S.guilds.length)return `<div class="card"><h3>No servers yet</h3><p class="desc">Add OmniBot where you have Manage Server.</p></div>`;return `<div class="grid">${S.guilds.map(g=>`<div class="server-card" data-id="${g.id}" data-name="${String(g.name||'').replace(/"/g,'&quot;')}">${g.icon?`<img src="${g.icon}">`:`<div class="avatar"></div>`}<div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div></div>`).join('')}</div>`}
 function renderOverview(){const b=S.bot;return `<div class="grid"><div class="stat"><div class="label">Bot</div><div class="value" style="color:${b.online?'var(--ok)':'var(--danger)'}">${b.online?'Online':'Offline'}</div></div><div class="stat"><div class="label">Members</div><div class="value">${b.memberCount??'—'}</div></div><div class="stat"><div class="label">AI today</div><div class="value">${(b.aiUsage&&b.aiUsage.count)||0}<span style="font-size:.9rem;color:var(--muted)"> / ${(b.aiUsage&&b.aiUsage.limit)||20}</span></div></div><div class="stat"><div class="label">Server</div><div class="value" style="font-size:1.1rem">${S.guildName}</div></div></div><div class="card" style="margin-top:16px"><h3>Channels loaded: ${(S.channels||[]).length} · Roles: ${(S.roles||[]).length}</h3></div>`}
 function channelOptions(selected){const opts=[`<option value="">— none —</option>`];for(const c of(S.channels||[])){const sel=String(selected||'')===String(c.id)?'selected':'';opts.push(`<option value="${c.id}" ${sel}>#${String(c.name||'').replace(/</g,'')} (${c.type||'channel'})</option>`)}return opts.join('')}
 function roleOptions(selected){const opts=[`<option value="">— none —</option>`];for(const r of(S.roles||[])){if(r.name==='@everyone')continue;const sel=String(selected||'')===String(r.id)?'selected':'';opts.push(`<option value="${r.id}" ${sel}>@${String(r.name||'').replace(/</g,'')}</option>`)}return opts.join('')}

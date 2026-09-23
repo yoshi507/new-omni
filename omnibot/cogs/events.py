@@ -12,7 +12,8 @@ from discord.ext import commands, tasks
 from omnibot import storage
 from omnibot.services import groq_client
 
-NATURAL = re.compile(r"^(?:omni(?:bot)?)(?:\s+|[,:]\s*)(.+)$", re.I)
+# Match omni / omnibot / OmniBot anywhere in the message (word boundary)
+NATURAL_TRIGGER = re.compile(r"\b(?:omni(?:bot)?)\b", re.I)
 
 DEAD_CHAT_PROMPTS = [
     "Anyone still around? Drop a 👋 if you're here!",
@@ -104,7 +105,6 @@ class Events(commands.Cog):
                     last = float(last_map.get(cid) or 0)
                     if last and (now - last) < threshold:
                         continue
-                    # Never messaged in this channel since enable — skip until first human msg
                     if not last:
                         continue
                     ch = guild.get_channel(int(cid))
@@ -130,6 +130,41 @@ class Events(commands.Cog):
     @deadchat_loop.before_loop
     async def before_deadchat(self):
         await self.bot.wait_until_ready()
+
+    def _extract_natural_prompt(self, content: str, guild: discord.Guild) -> str | None:
+        """If message mentions omni/omnibot/OmniBot (or bot nick) anywhere, return the prompt."""
+        text = content.strip()
+        if not text:
+            return None
+
+        # Anywhere: omni / omnibot
+        if NATURAL_TRIGGER.search(text):
+            # Strip trigger words; keep the rest as the question
+            cleaned = NATURAL_TRIGGER.sub(" ", text)
+            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
+            # If they only said "omni" with nothing else, treat as a greeting
+            return cleaned or "hi"
+
+        # Bot nickname at start (legacy)
+        me = guild.me
+        if me and me.nick:
+            nick = me.nick.strip()
+            low = text.lower()
+            nlow = nick.lower()
+            if low.startswith(nlow + " ") or low.startswith(nlow + ",") or low.startswith(nlow + ":"):
+                return text[len(nick) :].lstrip(" ,:").strip() or "hi"
+
+        # @mention of the bot anywhere
+        if me and me.mentioned_in(
+            type("M", (), {"mentions": [], "content": text, "role_mentions": []})()  # fallback below
+        ):
+            pass
+        if me and f"<@{me.id}>" in text or (me and f"<@!{me.id}>" in text):
+            cleaned = text.replace(f"<@{me.id}>", " ").replace(f"<@!{me.id}>", " ")
+            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
+            return cleaned or "hi"
+
+        return None
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -197,7 +232,6 @@ class Events(commands.Cog):
                     lv = d.setdefault("levels", {}).setdefault(
                         str(message.author.id), {"xp": 0, "level": 0}
                     )
-                    # scrub old bug flag if present
                     d.pop("_levelup", None)
                     lv["xp"] = int(lv.get("xp") or 0) + gain
                     need = 100 + int(lv.get("level") or 0) * 50
@@ -217,19 +251,18 @@ class Events(commands.Cog):
 
         if not message.content:
             return
-        content = message.content.strip()
+
+        # Mentions: if bot is mentioned, always treat as AI prompt
         prompt = None
-        m = NATURAL.match(content)
-        if m:
-            prompt = m.group(1).strip()
+        me = message.guild.me
+        if me and me in message.mentions:
+            cleaned = message.content
+            for u in message.mentions:
+                cleaned = cleaned.replace(f"<@{u.id}>", " ").replace(f"<@!{u.id}>", " ")
+            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
+            prompt = cleaned or "hi"
         else:
-            me = message.guild.me
-            if me and me.nick:
-                nick = me.nick.strip()
-                low = content.lower()
-                nlow = nick.lower()
-                if low.startswith(nlow + " ") or low.startswith(nlow + ",") or low.startswith(nlow + ":"):
-                    prompt = content[len(nick) :].lstrip(" ,:").strip()
+            prompt = self._extract_natural_prompt(message.content, message.guild)
 
         dash = data.get("dashboard") or {}
         ai_cfg = dash.get("ai") or {}
