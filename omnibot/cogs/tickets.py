@@ -123,10 +123,7 @@ class Tickets(commands.Cog):
         storage.update_guild(interaction.guild.id, mut)  # type: ignore
         staff_txt = staff_role.mention if staff_role else "(any role with Manage Messages)"
         await interaction.response.send_message(
-            f"Tickets configured.\n"
-            f"• Category: **{category.name}**\n"
-            f"• Staff role: {staff_txt}\n"
-            f"• Next: `/ticket button add` then `/ticket panel`",
+            f"Tickets configured.\n• Category: **{category.name}**\n• Staff role: {staff_txt}\n• Next: `/ticket button add` then `/ticket panel`",
             ephemeral=True,
         )
 
@@ -162,19 +159,19 @@ class Tickets(commands.Cog):
 
     button = app_commands.Group(name="button", parent=ticket, description="Manage panel buttons")
 
-    @button.command(name="add", description="Add a custom ticket panel button (staff only)")
+    @button.command(name="add", description="Add a custom ticket panel button")
     @app_commands.describe(
-        label="Button text shown on the panel",
-        purpose="Internal type / purpose (e.g. support, report, billing)",
-        use_form="If true, clicking opens a form to describe the request",
-        style="Button colour style",
+        label="Button text",
+        purpose="Purpose e.g. support",
+        use_form="Open a form when clicked",
+        style="Button style",
     )
     @app_commands.choices(
         style=[
-            app_commands.Choice(name="Blurple (primary)", value="primary"),
-            app_commands.Choice(name="Grey (secondary)", value="secondary"),
-            app_commands.Choice(name="Green (success)", value="success"),
-            app_commands.Choice(name="Red (danger)", value="danger"),
+            app_commands.Choice(name="Blurple", value="primary"),
+            app_commands.Choice(name="Grey", value="secondary"),
+            app_commands.Choice(name="Green", value="success"),
+            app_commands.Choice(name="Red", value="danger"),
         ]
     )
     @app_commands.checks.has_permissions(administrator=True)
@@ -189,16 +186,15 @@ class Tickets(commands.Cog):
         data = storage.load_guild(interaction.guild.id)  # type: ignore
         buttons = list((data.get("tickets") or {}).get("buttons") or [])
         if len(buttons) >= 10:
-            return await interaction.response.send_message("Max 10 buttons per panel.", ephemeral=True)
+            return await interaction.response.send_message("Max 10 buttons.", ephemeral=True)
         bid = _slug(purpose) + "-" + uuid.uuid4().hex[:4]
-        style_val = style.value if style else "primary"
         buttons.append(
             {
                 "id": bid,
                 "label": label[:80],
                 "purpose": purpose[:40],
                 "useForm": bool(use_form),
-                "style": style_val,
+                "style": style.value if style else "primary",
             }
         )
 
@@ -208,14 +204,12 @@ class Tickets(commands.Cog):
             t["enabled"] = True
 
         storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        form_txt = "opens a form" if use_form else "opens ticket immediately"
         await interaction.response.send_message(
-            f"Button **{label}** added (`{bid}`) — {form_txt}.\nRun `/ticket panel` to post the panel.",
+            f"Button **{label}** added. Run `/ticket panel` to post.",
             ephemeral=True,
         )
 
-    @button.command(name="remove", description="Remove a panel button by id or label")
-    @app_commands.describe(button="Button id or exact label")
+    @button.command(name="remove", description="Remove a panel button")
     @app_commands.checks.has_permissions(administrator=True)
     async def button_remove(self, interaction: discord.Interaction, button: str):
         data = storage.load_guild(interaction.guild.id)  # type: ignore
@@ -233,41 +227,29 @@ class Tickets(commands.Cog):
             d.setdefault("tickets", {})["buttons"] = new
 
         storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message(
-            "Button removed. Re-run `/ticket panel` to update.", ephemeral=True
-        )
+        await interaction.response.send_message("Button removed. Re-run `/ticket panel`.", ephemeral=True)
 
-    @button.command(name="list", description="List configured ticket buttons")
+    @button.command(name="list", description="List ticket buttons")
     @app_commands.checks.has_permissions(administrator=True)
     async def button_list(self, interaction: discord.Interaction):
         data = storage.load_guild(interaction.guild.id)  # type: ignore
         buttons = (data.get("tickets") or {}).get("buttons") or []
         if not buttons:
-            return await interaction.response.send_message(
-                "No buttons yet. Add some with `/ticket button add`.", ephemeral=True
-            )
-        lines = []
-        for b in buttons:
-            form = "form" if b.get("useForm") else "instant"
-            lines.append(f"• **{b.get('label')}** (`{b.get('id')}`) · {b.get('purpose')} · {form}")
+            return await interaction.response.send_message("No buttons. Use `/ticket button add`.", ephemeral=True)
+        lines = [
+            f"• **{b.get('label')}** (`{b.get('id')}`) · {b.get('purpose')}"
+            for b in buttons
+        ]
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-    @ticket.command(name="panel", description="Post the ticket panel using your custom buttons")
-    @app_commands.describe(
-        channel="Where to post (defaults to this channel)",
-        title="Panel title",
-        description="Panel description",
-    )
+    @ticket.command(name="panel", description="Post the ticket panel")
     @app_commands.checks.has_permissions(administrator=True)
     async def panel(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
         title: str = "Support Tickets",
-        description: str = (
-            "Click a button below to open a private ticket with staff.\n"
-            "Please only open a ticket if you need help."
-        ),
+        description: str = "Click a button to open a private ticket with staff.",
     ):
         if not interaction.guild:
             return await interaction.response.send_message("Guild only.", ephemeral=True)
@@ -277,10 +259,7 @@ class Tickets(commands.Cog):
             return await interaction.response.send_message("Run `/ticket setup` first.", ephemeral=True)
         buttons = tcfg.get("buttons") or []
         if not buttons:
-            return await interaction.response.send_message(
-                "No buttons configured. Add some with `/ticket button add` first.",
-                ephemeral=True,
-            )
+            return await interaction.response.send_message("Add buttons with `/ticket button add` first.", ephemeral=True)
 
         dest = channel or interaction.channel
         if not isinstance(dest, discord.TextChannel):
@@ -304,7 +283,6 @@ class Tickets(commands.Cog):
             )
 
         emb = discord.Embed(title=title[:256], description=description[:4000], color=0x5B6CFF)
-        emb.set_footer(text="OmniBot tickets · configured by staff")
         msg = await dest.send(embed=emb, view=view)
 
         def mut(d):
@@ -314,17 +292,9 @@ class Tickets(commands.Cog):
             t["panelMessageId"] = str(msg.id)
 
         storage.update_guild(interaction.guild.id, mut)
-        await interaction.response.send_message(
-            f"Ticket panel posted in {dest.mention} with **{len(buttons)}** button(s).",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(f"Panel posted in {dest.mention}.", ephemeral=True)
 
-    async def _create_ticket(
-        self,
-        interaction: discord.Interaction,
-        kind: str,
-        subject: str,
-    ) -> None:
+    async def _create_ticket(self, interaction: discord.Interaction, kind: str, subject: str) -> None:
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             if not interaction.response.is_done():
                 return await interaction.response.send_message("Guild only.", ephemeral=True)
@@ -333,7 +303,7 @@ class Tickets(commands.Cog):
         data = storage.load_guild(interaction.guild.id)
         tcfg = data.get("tickets") or {}
         if not tcfg.get("enabled") or not tcfg.get("categoryId"):
-            msg = "Tickets are not set up. An admin must run `/ticket setup`."
+            msg = "Tickets not set up. Admin must run `/ticket setup`."
             if interaction.response.is_done():
                 return await interaction.followup.send(msg, ephemeral=True)
             return await interaction.response.send_message(msg, ephemeral=True)
@@ -362,10 +332,7 @@ class Tickets(commands.Cog):
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                attach_files=True,
-                read_message_history=True,
+                view_channel=True, send_messages=True, attach_files=True, read_message_history=True
             ),
             interaction.guild.me: discord.PermissionOverwrite(
                 view_channel=True, send_messages=True, manage_channels=True
@@ -386,8 +353,7 @@ class Tickets(commands.Cog):
 
         def mut(d):
             d.setdefault("tickets", {})["enabled"] = True
-            recs = d.setdefault("ticketRecords", {})
-            recs[tid] = {
+            d.setdefault("ticketRecords", {})[tid] = {
                 "id": tid,
                 "channelId": str(ch.id),
                 "userId": str(interaction.user.id),
@@ -413,19 +379,14 @@ class Tickets(commands.Cog):
             description=f"**Type:** {kind}\n**Subject:** {subject[:500]}",
             color=0x5B6CFF,
         )
-        emb.set_footer(text="Staff: /ticket claim · close with the button or /ticket close")
-        staff_ping = ""
-        role_ids = _staff_role_ids(tcfg)
-        if role_ids:
-            mentions = []
-            for rid in role_ids:
-                try:
-                    mentions.append(f"<@&{int(rid)}>")
-                except (TypeError, ValueError):
-                    pass
-            staff_ping = " ".join(mentions)
+        staff_ping = " "
+        for rid in _staff_role_ids(tcfg):
+            try:
+                staff_ping += f" <@&{int(rid)}>"
+            except (TypeError, ValueError):
+                pass
         await ch.send(
-            content=f"{interaction.user.mention} {staff_ping}\nStaff will be with you shortly.".strip(),
+            content=f"{interaction.user.mention}{staff_ping}\nStaff will be with you shortly.".strip(),
             embed=emb,
             view=close_view,
         )
@@ -436,15 +397,14 @@ class Tickets(commands.Cog):
             if isinstance(log_ch, discord.TextChannel):
                 try:
                     await log_ch.send(
-                        f"🎫 Ticket **{tid}** ({kind}) opened by {interaction.user.mention} → {ch.mention}"
+                        f"🎫 Ticket **{tid}** ({kind}) by {interaction.user.mention} → {ch.mention}"
                     )
                 except Exception:
                     pass
 
         await interaction.followup.send(f"Ticket created: {ch.mention}", ephemeral=True)
 
-    @ticket.command(name="open", description="Open a ticket (prefer the panel)")
-    @app_commands.describe(subject="What do you need help with?", kind="Ticket type / purpose")
+    @ticket.command(name="open", description="Open a ticket")
     async def open_ticket(self, interaction: discord.Interaction, subject: str, kind: str = "support"):
         await self._create_ticket(interaction, kind[:40], subject)
 
@@ -452,8 +412,7 @@ class Tickets(commands.Cog):
     async def claim(self, interaction: discord.Interaction):
         if not isinstance(interaction.user, discord.Member) or not interaction.guild:
             return await interaction.response.send_message("Guild only.", ephemeral=True)
-        tcfg = _ticket_cfg(interaction.guild.id)
-        if not _is_staff(interaction.user, tcfg):
+        if not _is_staff(interaction.user, _ticket_cfg(interaction.guild.id)):
             return await interaction.response.send_message("Staff only.", ephemeral=True)
         await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}.")
 
@@ -469,18 +428,16 @@ class Tickets(commands.Cog):
             if str(rec.get("channelId")) == str(interaction.channel.id):
                 tid = k
                 break
-        is_opener = False
-        if tid:
-            is_opener = str(recs[tid].get("userId")) == str(interaction.user.id)
+        is_opener = tid and str(recs[tid].get("userId")) == str(interaction.user.id)
         if not (is_opener or _is_staff(interaction.user, tcfg)):
-            return await interaction.response.send_message("Staff or ticket opener only.", ephemeral=True)
+            return await interaction.response.send_message("Staff or opener only.", ephemeral=True)
 
         def mut(d):
             if tid and tid in (d.get("ticketRecords") or {}):
                 d["ticketRecords"][tid]["status"] = "closed"
 
         storage.update_guild(interaction.guild.id, mut)
-        await interaction.response.send_message("Closing ticket…")
+        await interaction.response.send_message("Closing…")
         try:
             await interaction.channel.delete(reason=f"Closed by {interaction.user}")  # type: ignore
         except Exception:
@@ -504,18 +461,16 @@ class Tickets(commands.Cog):
                 if str(rec.get("channelId")) == str(interaction.channel.id):
                     tid = k
                     break
-            is_opener = False
-            if tid:
-                is_opener = str(recs[tid].get("userId")) == str(interaction.user.id)
+            is_opener = tid and str(recs[tid].get("userId")) == str(interaction.user.id)
             if not (is_opener or _is_staff(interaction.user, tcfg)):
-                return await interaction.response.send_message("Staff or ticket opener only.", ephemeral=True)
+                return await interaction.response.send_message("Staff or opener only.", ephemeral=True)
 
             def mut(d):
                 if tid and tid in (d.get("ticketRecords") or {}):
                     d["ticketRecords"][tid]["status"] = "closed"
 
             storage.update_guild(interaction.guild.id, mut)
-            await interaction.response.send_message("Closing ticket…")
+            await interaction.response.send_message("Closing…")
             try:
                 await interaction.channel.delete(reason=f"Closed by {interaction.user}")  # type: ignore
             except Exception:
@@ -530,7 +485,9 @@ class Tickets(commands.Cog):
             if not btn:
                 return await interaction.response.send_message("Unknown button.", ephemeral=True)
             if btn.get("useForm"):
-                modal = TicketFormModal(self, button_id, str(btn.get("purpose") or "support"), str(btn.get("label") or "Ticket"))
+                modal = TicketFormModal(
+                    self, button_id, str(btn.get("purpose") or "support"), str(btn.get("label") or "Ticket")
+                )
                 await interaction.response.send_modal(modal)
             else:
                 await self._create_ticket(
