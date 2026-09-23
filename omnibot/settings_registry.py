@@ -57,6 +57,7 @@ SETTINGS: list[dict[str, Any]] = [
     {"id": "tickets.categoryId", "path": "tickets.categoryId", "type": "text", "default": "", "category": "tickets"},
     {"id": "tickets.logChannelId", "path": "tickets.logChannelId", "type": "channel", "default": "", "category": "tickets"},
     {"id": "tickets.panelChannelId", "path": "tickets.panelChannelId", "type": "channel", "default": "", "category": "tickets"},
+    {"id": "tickets.staffRoleId", "path": "tickets.staffRoleIds.0", "type": "role", "default": "", "category": "tickets"},
     # Economy
     {"id": "economy.enabled", "path": "economy.enabled", "type": "bool", "default": True, "category": "fun"},
     # Temp voice
@@ -108,8 +109,24 @@ def get_defaults_nested() -> dict[str, Any]:
         parts = s["path"].split(".")
         cur = root
         for p in parts[:-1]:
+            # numeric path segments for list-like staffRoleIds.0
+            if p.isdigit():
+                idx = int(p)
+                if not isinstance(cur, list):
+                    # parent should have been list — skip odd paths
+                    break
+                while len(cur) <= idx:
+                    cur.append({} if False else "")
+                cur = cur  # leave as list; next assign handles
+                continue
             cur = cur.setdefault(p, {})
-        cur[parts[-1]] = s["default"]
+        if parts[-1].isdigit() and isinstance(cur, list):
+            idx = int(parts[-1])
+            while len(cur) <= idx:
+                cur.append("")
+            cur[idx] = s["default"]
+        else:
+            cur[parts[-1]] = s["default"]
     root.setdefault("levels", {})
     root.setdefault("invites", {})
     root.setdefault("starboardPosts", {})
@@ -125,5 +142,5 @@ def get_defaults_nested() -> dict[str, Any]:
     root.setdefault("starboard", {"enabled": False})
     root.setdefault("deadChat", {"enabled": False, "minutes": 60, "lastMessageAt": {}})
     root.setdefault("tempVoice", {"enabled": False, "lobbyChannelId": ""})
-    root.setdefault("tickets", {"enabled": False})
+    root.setdefault("tickets", {"enabled": False, "staffRoleIds": [], "buttons": []})
     return root
