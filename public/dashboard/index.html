@@ -1,1 +1,462 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OmniBot Dashboard</title>
+<style>
+:root{
+  --bg:#0b0d12;--sidebar:#0e1118;--panel:#141824;--panel2:#1a1f2e;
+  --border:#252b3b;--text:#eef0f6;--muted:#8b93a7;--accent:#5b6cff;
+  --accent-hover:#6f7dff;--ok:#3dd68c;--warn:#f5a524;--danger:#f04438;
+  --radius:14px;--shadow:0 8px 32px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none}
+button,input,select,textarea{font:inherit}
+.btn{appearance:none;border:0;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:#3a4258}
+.btn-ghost{background:var(--panel2);color:var(--text)}
+.btn-danger{background:rgba(240,68,56,.15);color:#ff8b84;border:1px solid rgba(240,68,56,.3)}
+.landing{min-height:100%;display:flex;flex-direction:column}
+.landing-nav{display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--border)}
+.brand{font-weight:800;font-size:1.25rem;letter-spacing:-.03em}.brand span{color:var(--accent)}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 20px;background:radial-gradient(ellipse at 50% 0%,rgba(91,108,255,.18),transparent 55%)}
+.hero h1{font-size:clamp(2rem,5vw,3.2rem);margin:0 0 12px;letter-spacing:-.04em}
+.hero p{color:var(--muted);max-width:540px;line-height:1.6;margin:0 0 28px}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.status-dot{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--muted);font-size:.9rem}
+.status-dot i{width:8px;height:8px;border-radius:50%;background:#555}
+.status-dot.ok i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.landing-footer{padding:20px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;gap:16px;flex-wrap:wrap}
+.app{display:none;height:100vh}
+.app.on{display:grid;grid-template-columns:260px 1fr}
+.sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 14px}
+.side-brand{font-weight:800;padding:6px 10px 18px;font-size:1.1rem}.side-brand span{color:var(--accent)}
+.side-nav{display:flex;flex-direction:column;gap:4px;flex:1;overflow:auto}
+.side-nav button{text-align:left;background:transparent;border:0;color:var(--muted);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:500}
+.side-nav button:hover{background:var(--panel);color:var(--text)}
+.side-nav button.active{background:rgba(91,108,255,.15);color:#c5cbff}
+.side-user{border-top:1px solid var(--border);padding-top:14px;margin-top:12px;font-size:.9rem;color:var(--muted)}
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-bottom:1px solid var(--border);background:rgba(14,17,24,.8);backdrop-filter:blur(8px)}
+.topbar h2{margin:0;font-size:1.15rem;font-weight:700}
+.content{flex:1;overflow:auto;padding:24px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.card+.card{margin-top:16px}
+.card h3{margin:0 0 6px;font-size:1rem}.card .desc{color:var(--muted);font-size:.88rem;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.stat{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.stat .label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}.stat .value{font-size:1.5rem;font-weight:700;margin-top:4px}
+.server-card{display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--panel);cursor:pointer;transition:.15s}
+.server-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.server-card img,.avatar{width:44px;height:44px;border-radius:12px;object-fit:cover;background:#222}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:0}
+.switch{width:46px;height:26px;border-radius:999px;background:#2a3144;position:relative;cursor:pointer;flex-shrink:0;transition:.15s}
+.switch.on{background:var(--accent)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
+.switch.on::after{left:23px}
+label.field{display:block;margin-top:14px;font-size:.85rem;color:var(--muted)}
+label.field input,label.field select,label.field textarea{
+  width:100%;margin-top:6px;background:#0c0f16;border:1px solid var(--border);color:var(--text);
+  border-radius:10px;padding:11px 12px
+}
+label.field textarea{min-height:100px;resize:vertical}
+.toast{position:fixed;bottom:24px;right:24px;background:#1c2333;border:1px solid var(--border);padding:12px 16px;border-radius:12px;box-shadow:var(--shadow);display:none;z-index:50}
+.toast.show{display:block}
+.hidden{display:none!important}
+@media(max-width:860px){
+  .app.on{grid-template-columns:1fr}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:min(280px,85vw);z-index:40;transform:translateX(-105%);transition:.2s}
+  .sidebar.open{transform:none}
+  .menu-btn{display:inline-flex!important}
+}
+.menu-btn{display:none}
+</style>
+</head>
+<body>
+<div id="landing" class="landing">
+  <div class="landing-nav">
+    <div class="brand">Omni<span>Bot</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn btn-secondary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank" rel="noopener">Add to Discord</a>
+      <a class="btn btn-primary" href="/auth/login">Open dashboard</a>
+    </div>
+  </div>
+  <div class="hero">
+    <h1>Control every server<br/>from one dashboard</h1>
+    <p>AI, moderation, music, economy, appeals and more — configured live, synced with OmniBot.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/auth/login">Open dashboard</a>
+      <a class="btn btn-secondary" href="/auth/login">Appeal a punishment</a>
+      <button class="btn btn-ghost" id="btn-advertise-home">Advertise</button>
+      <a class="btn btn-ghost" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank" rel="noopener">Add to Discord</a>
+    </div>
+    <div class="status-dot" id="bot-status"><i></i> Checking status…</div>
+  </div>
+  <div class="landing-footer">
+    <a href="/tos">Terms of Service</a>
+    <a href="/privacy-policy">Privacy Policy</a>
+    <a href="https://discord.gg/WpdH42HShV" target="_blank" rel="noopener">Join our Discord</a>
+  </div>
+</div>
+<div id="app" class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-brand">Omni<span>Bot</span></div>
+    <nav class="side-nav" id="side-nav">
+      <button data-view="servers" class="active">Servers</button>
+      <button data-view="overview" class="needs-guild hidden">Overview</button>
+      <button data-view="ai" class="needs-guild hidden">AI & Personality</button>
+      <button data-view="moderation" class="needs-guild hidden">Moderation</button>
+      <button data-view="engagement" class="needs-guild hidden">Engagement</button>
+      <button data-view="appeals" class="needs-guild hidden">Appeals</button>
+      <button data-view="music" class="needs-guild hidden">Music</button>
+      <button data-view="logging" class="needs-guild hidden">Logging</button>
+      <button data-view="tickets" class="needs-guild hidden">Tickets</button>
+      <button data-view="fun" class="needs-guild hidden">Economy & Fun</button>
+      <button data-view="voice" class="needs-guild hidden">Voice</button>
+      <button data-view="appeal-portal">Appeal portal</button>
+      <button data-view="advertise">Advertise</button>
+    </nav>
+    <div class="side-user">
+      <div id="user-label">—</div>
+      <button class="btn btn-secondary" id="btn-logout" style="margin-top:10px;width:100%;justify-content:center">Log out</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-ghost menu-btn" id="menu-btn">☰</button>
+        <h2 id="page-title">Servers</h2>
+      </div>
+      <div id="top-actions"></div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const S = { user:null, guilds:[], guildId:null, guildName:'', settings:{}, bot:{}, channels:[], roles:[], view:'servers' };
+const SECTIONS = {
+  overview: null,
+  ai: [
+    {id:'ai.enabled', label:'Enable AI', type:'bool', hint:'Master switch for AI features'},
+    {id:'ai.naturalInvocation', label:'Natural “omni …” messages', type:'bool'},
+    {id:'ai.memoryEnabled', label:'Conversation memory', type:'bool'},
+    {id:'ai.commandPrefix', label:'Command prefix', type:'text'},
+    {id:'ai.personality', label:'Custom personality / instructions', type:'textarea', hint:'How Omni should speak in this server'},
+  ],
+  moderation: [
+    {id:'moderation.automodEnabled', label:'Word filter automod', type:'bool'},
+    {id:'moderation.antiSpamEnabled', label:'Anti-spam', type:'bool'},
+    {id:'moderation.blockedWords', label:'Blocked words (comma-separated)', type:'textarea'},
+    {id:'security.enabled', label:'Anti-nuke monitoring', type:'bool'},
+    {id:'security.mode', label:'Security mode', type:'select', options:['monitor','alert','lockdown']},
+    {id:'honeypot.enabled', label:'Honeypot protection', type:'bool', hint:'Ban anyone who posts in the honeypot channel'},
+    {id:'honeypot.channelId', label:'Honeypot channel', type:'channel'},
+  ],
+  engagement: [
+    {id:'welcome.enabled', label:'Welcome messages', type:'bool'},
+    {id:'welcome.channelId', label:'Welcome channel', type:'channel'},
+    {id:'welcome.message', label:'Welcome text ({user}, {server}, {username})', type:'textarea'},
+    {id:'goodbye.enabled', label:'Goodbye messages', type:'bool'},
+    {id:'goodbye.channelId', label:'Goodbye channel', type:'channel'},
+    {id:'goodbye.message', label:'Goodbye text', type:'textarea'},
+    {id:'deadchat.enabled', label:'Dead Chat Reviver', type:'bool', hint:'Bot pings the channel after quiet period'},
+    {id:'deadchat.minutes', label:'Minutes of silence before revive', type:'number'},
+    {id:'deadchat.channelId', label:'Dead chat channel (optional — empty = any tracked)', type:'channel'},
+    {id:'deadchat.message', label:'Custom revive message (optional)', type:'textarea'},
+    {id:'leveling.enabled', label:'Leveling / XP', type:'bool'},
+    {id:'leveling.announce', label:'Announce level-ups', type:'bool'},
+    {id:'autorole.enabled', label:'Autorole', type:'bool'},
+    {id:'autorole.roleId', label:'Autorole role', type:'role'},
+    {id:'suggestions.enabled', label:'Suggestions', type:'bool'},
+    {id:'starboard.enabled', label:'Starboard', type:'bool'},
+    {id:'starboard.channelId', label:'Starboard channel', type:'channel'},
+    {id:'stickyRoles.enabled', label:'Sticky roles (restore on rejoin)', type:'bool'},
+    {id:'counting.enabled', label:'Counting game', type:'bool'},
+    {id:'counting.channelId', label:'Counting channel', type:'channel'},
+    {id:'wordchain.enabled', label:'Word-chain game', type:'bool'},
+    {id:'wordchain.channelId', label:'Word-chain channel', type:'channel'},
+    {id:'verification.enabled', label:'Verification gate', type:'bool'},
+    {id:'verification.roleId', label:'Verified role', type:'role'},
+    {id:'booster.enabled', label:'Booster celebration messages', type:'bool'},
+    {id:'booster.channelId', label:'Booster channel', type:'channel'},
+  ],
+  appeals: [
+    {id:'appeals.enabled', label:'Enable appeals', type:'bool'},
+    {id:'appeals.channelId', label:'Appeals log channel', type:'channel'},
+    {id:'appeals.cooldownHours', label:'Cooldown hours', type:'number'},
+    {id:'appeals.acceptMessage', label:'Accept message', type:'textarea'},
+    {id:'appeals.rejectMessage', label:'Reject message', type:'textarea'},
+  ],
+  music: [
+    {id:'music.enabled', label:'Enable music', type:'bool'},
+    {id:'music.defaultVolume', label:'Default volume (0–100)', type:'number'},
+  ],
+  logging: [
+    {id:'logging.enabled', label:'Enable logging', type:'bool'},
+    {id:'logging.channelId', label:'Log channel', type:'channel'},
+    {id:'logging.voice', label:'Log voice joins/moves', type:'bool'},
+  ],
+  tickets: [
+    {id:'tickets.enabled', label:'Enable tickets', type:'bool'},
+    {id:'tickets.categoryId', label:'Ticket category ID (from /ticket setup)', type:'text'},
+    {id:'tickets.logChannelId', label:'Ticket log channel', type:'channel'},
+  ],
+  fun: [
+    {id:'economy.enabled', label:'Enable economy/games currency', type:'bool'},
+  ],
+  voice: [
+    {id:'tempVoice.enabled', label:'Join-to-create temp voice', type:'bool'},
+    {id:'tempVoice.lobbyChannelId', label:'Lobby voice channel (join here to create room)', type:'channel'},
+  ],
+};
+async function api(path, opts={}) {
+  const r = await fetch(path, {
+    credentials:'include',
+    ...opts,
+    headers:{'Content-Type':'application/json', ...(opts.headers||{})},
+  });
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { const j = await r.json(); msg = j.detail || j.message || msg; } catch {}
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  const ct = r.headers.get('content-type')||'';
+  return ct.includes('json') ? r.json() : r.text();
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+function showLanding(on) {
+  document.getElementById('landing').style.display = on ? 'flex' : 'none';
+  document.getElementById('app').classList.toggle('on', !on);
+}
+async function refreshAuth() {
+  try {
+    const me = await api('/auth/me');
+    S.user = me.user;
+    document.getElementById('user-label').textContent = me.user.username || me.user.global_name || 'User';
+    return true;
+  } catch {
+    S.user = null;
+    return false;
+  }
+}
+function setView(view) {
+  S.view = view;
+  document.querySelectorAll('.side-nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+  document.querySelectorAll('.needs-guild').forEach(b => {
+    b.classList.toggle('hidden', !S.guildId);
+  });
+  const titles = {
+    servers:'Your servers', overview:'Overview', ai:'AI & Personality',
+    moderation:'Moderation', engagement:'Engagement', appeals:'Appeals',
+    music:'Music', logging:'Logging', tickets:'Tickets', fun:'Economy & Fun', voice:'Voice', 'appeal-portal':'Appeal a punishment', advertise:'Advertise board'
+  };
+  document.getElementById('page-title').textContent = titles[view] || view;
+  render();
+  document.getElementById('sidebar').classList.remove('open');
+}
+async function loadGuilds() {
+  const data = await api('/guilds');
+  S.guilds = data.guilds || [];
+}
+async function openGuild(id, name) {
+  S.guildId = id; S.guildName = name || id;
+  const [s, bot, ch, roles] = await Promise.all([
+    api(`/guilds/${id}/settings`),
+    api(`/guilds/${id}/bot`),
+    api(`/guilds/${id}/channels`).catch(() => ({channels:[]})),
+    api(`/guilds/${id}/roles`).catch(() => ({roles:[]})),
+  ]);
+  S.settings = s.settings || {};
+  S.bot = bot || {};
+  S.channels = ch.channels || [];
+  S.roles = roles.roles || [];
+  setView('overview');
+}
+function renderServers() {
+  if (!S.guilds.length) {
+    return `<div class="card"><h3>No servers yet</h3>
+      <p class="desc">Add OmniBot to a server where you have Manage Server, then refresh.</p>
+      <a class="btn btn-primary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank">Add to Discord</a></div>`;
+  }
+  return `<div class="grid">${S.guilds.map(g => `
+    <div class="server-card" data-id="${g.id}" data-name="${g.name.replace(/"/g,'"')}">
+      ${g.icon ? `<img src="${g.icon}" alt="">` : `<div class="avatar"></div>`}
+      <div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div>
+    </div>`).join('')}</div>`;
+}
+function renderOverview() {
+  const b = S.bot;
+  return `
+    <div class="grid">
+      <div class="stat"><div class="label">Bot</div><div class="value" style="color:${b.online? 'var(--ok)':'var(--danger)'}">${b.online?'Online':'Offline'}</div></div>
+      <div class="stat"><div class="label">Members</div><div class="value">${b.memberCount ?? '—'}</div></div>
+      <div class="stat"><div class="label">AI today</div><div class="value">${(b.aiUsage&&b.aiUsage.count)||0}<span style="font-size:.9rem;color:var(--muted)"> / ${(b.aiUsage&&b.aiUsage.limit)||20}</span></div></div>
+      <div class="stat"><div class="label">Server</div><div class="value" style="font-size:1.1rem">${S.guildName}</div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Quick tip</h3>
+      <p class="desc">Use the sidebar to configure AI personality, moderation, welcomes, appeals and music. Channel dropdowns load from Discord.</p></div>`;
+}
+function channelOptions(selected) {
+  const opts = [`<option value="">— none —</option>`];
+  for (const c of (S.channels||[])) {
+    const sel = String(selected||'') === String(c.id) ? 'selected' : '';
+    opts.push(`<option value="${c.id}" ${sel}>#${c.name} (${c.type||'channel'})</option>`);
+  }
+  return opts.join('');
+}
+function roleOptions(selected) {
+  const opts = [`<option value="">— none —</option>`];
+  for (const r of (S.roles||[])) {
+    if (r.name === '@everyone') continue;
+    const sel = String(selected||'') === String(r.id) ? 'selected' : '';
+    opts.push(`<option value="${r.id}" ${sel}>@${r.name}</option>`);
+  }
+  return opts.join('');
+}
+function renderSettings(keys) {
+  if (!keys) return renderOverview();
+  const rows = keys.map(f => {
+    const val = S.settings[f.id];
+    if (f.type === 'bool') {
+      return `<div class="toggle-row"><div><div>${f.label}</div>${f.hint?`<div class="desc" style="margin:0">${f.hint}</div>`:''}</div>
+        <div class="switch ${val?'on':''}" data-id="${f.id}"></div></div>`;
+    }
+    if (f.type === 'channel') {
+      return `<label class="field">${f.label}${f.hint?` · ${f.hint}`:''}<select data-id="${f.id}">${channelOptions(val)}</select></label>`;
+    }
+    if (f.type === 'role') {
+      return `<label class="field">${f.label}<select data-id="${f.id}">${roleOptions(val)}</select></label>`;
+    }
+    if (f.type === 'select') {
+      return `<label class="field">${f.label}<select data-id="${f.id}">${(f.options||[]).map(o=>`<option ${val===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
+    }
+    if (f.type === 'textarea') {
+      return `<label class="field">${f.label}${f.hint?` · ${f.hint}`:''}<textarea data-id="${f.id}">${val ?? ''}</textarea></label>`;
+    }
+    return `<label class="field">${f.label}<input data-id="${f.id}" type="${f.type==='number'?'number':'text'}" value="${val ?? ''}"></label>`;
+  }).join('');
+  return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Settings apply only to this server. Channel/role dropdowns load from Discord.</p>${rows}
+    <button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button></div>`;
+}
+async function renderAppealPortal() {
+  let servers = [];
+  try { servers = (await api('/appeals/servers')).servers || []; } catch {}
+  return `<div class="card"><h3>Appeal a punishment</h3>
+    <p class="desc">Choose a server with appeals enabled. You must be logged in.</p>
+    <input id="appeal-search" placeholder="Search servers…" style="width:100%;margin-bottom:12px;background:#0c0f16;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:11px 12px">
+    <div id="appeal-list" class="grid">${servers.map(s=>`
+      <div class="server-card appeal-pick" data-id="${s.id}">
+        ${s.icon?`<img src="${s.icon}">`:`<div class="avatar"></div>`}
+        <strong>${s.name}</strong>
+      </div>`).join('') || '<p class="desc">No servers currently accept appeals.</p>'}</div>
+    <div id="appeal-form" class="hidden" style="margin-top:16px">
+      <label class="field">Punishment type
+        <select id="appeal-type"><option value="ban">Ban</option><option value="timeout">Timeout</option><option value="warn">Warn</option></select>
+      </label>
+      <label class="field">Why should this be overturned?<textarea id="appeal-reason"></textarea></label>
+      <label class="field">Extra context<textarea id="appeal-extra"></textarea></label>
+      <button class="btn btn-primary" id="appeal-submit" style="margin-top:12px">Submit</button>
+    </div></div>`;
+}
+async function renderAdvertise() {
+  let servers = [];
+  try { servers = (await api('/advertise/list')).servers || []; } catch {}
+  return `<div class="card"><h3>Advertise board</h3>
+    <p class="desc">List your server with <code>/advertise</code> in Discord.</p>
+    <div class="grid">${servers.map(s=>`
+      <div class="card" style="box-shadow:none"><h3>${s.name}</h3>
+        <p class="desc">${s.category||''}</p><p>${s.description||''}</p>
+        ${s.invite?`<a class="btn btn-primary" href="${s.invite}" target="_blank">Join</a>`:''}
+      </div>`).join('') || '<p class="desc">No servers listed yet.</p>'}</div></div>`;
+}
+async function render() {
+  const c = document.getElementById('content');
+  if (S.view === 'servers') c.innerHTML = renderServers();
+  else if (S.view === 'overview') c.innerHTML = renderOverview();
+  else if (S.view === 'appeal-portal') c.innerHTML = await renderAppealPortal();
+  else if (S.view === 'advertise') c.innerHTML = await renderAdvertise();
+  else c.innerHTML = renderSettings(SECTIONS[S.view]);
+  bind();
+}
+function bind() {
+  document.querySelectorAll('.server-card[data-id]:not(.appeal-pick)').forEach(el => {
+    el.onclick = () => openGuild(el.dataset.id, el.dataset.name).catch(e => toast(e.message));
+  });
+  document.querySelectorAll('.switch[data-id]').forEach(el => {
+    el.onclick = () => el.classList.toggle('on');
+  });
+  const save = document.getElementById('btn-save');
+  if (save) save.onclick = async () => {
+    const patch = {};
+    document.querySelectorAll('[data-id]').forEach(el => {
+      const id = el.dataset.id;
+      if (el.classList.contains('switch')) patch[id] = el.classList.contains('on');
+      else patch[id] = el.value;
+    });
+    try {
+      await api(`/guilds/${S.guildId}/settings`, { method:'PUT', body: JSON.stringify({ patch }) });
+      Object.assign(S.settings, patch);
+      toast('Saved');
+    } catch (e) { toast(e.message); }
+  };
+  document.querySelectorAll('.appeal-pick').forEach(el => {
+    el.onclick = () => {
+      document.getElementById('appeal-form').classList.remove('hidden');
+      document.getElementById('appeal-form').dataset.gid = el.dataset.id;
+    };
+  });
+  const asub = document.getElementById('appeal-submit');
+  if (asub) asub.onclick = async () => {
+    const form = document.getElementById('appeal-form');
+    try {
+      await api('/appeals/submit', { method:'POST', body: JSON.stringify({
+        guild_id: form.dataset.gid,
+        punishment_type: document.getElementById('appeal-type').value,
+        reason: document.getElementById('appeal-reason').value,
+        extra: document.getElementById('appeal-extra').value,
+      })});
+      toast('Appeal submitted');
+    } catch (e) { toast(e.message); }
+  };
+}
+document.getElementById('side-nav').onclick = (e) => {
+  const b = e.target.closest('button[data-view]');
+  if (b) setView(b.dataset.view);
+};
+document.getElementById('btn-logout').onclick = async () => {
+  try { await api('/auth/logout', { method:'POST' }); } catch {}
+  location.href = '/';
+};
+document.getElementById('menu-btn').onclick = () => document.getElementById('sidebar').classList.toggle('open');
+document.getElementById('btn-advertise-home').onclick = async () => {
+  if (!(await refreshAuth())) return location.href = '/auth/login';
+  showLanding(false); setView('advertise');
+};
+(async () => {
+  try {
+    const v = await api('/version');
+    const st = document.getElementById('bot-status');
+    if (v.discordReady) { st.classList.add('ok'); st.innerHTML = '<i></i> Bot online'; }
+    else st.innerHTML = '<i></i> Bot offline';
+  } catch { document.getElementById('bot-status').innerHTML = '<i></i> API unreachable'; }
+  if (await refreshAuth()) {
+    showLanding(false);
+    try { await loadGuilds(); } catch {}
+    setView('servers');
+  } else showLanding(true);
+})();
+</script>
+</body>
+</html>
