@@ -11,13 +11,37 @@ from discord.ext import commands
 
 from omnibot import storage
 
-HONEYPOT_WARNING = (
-    "⚠️ **HONEYPOT CHANNEL** ⚠️\n\n"
-    "This channel is monitored.\n"
-    "**Anyone who sends a message here will be automatically banned.**\n\n"
-    "If you can see this and you are a normal member: **do not type anything.**\n"
-    "Leave this channel immediately."
-)
+
+async def post_honeypot_warning(channel: discord.TextChannel) -> discord.Message | None:
+    emb = discord.Embed(
+        title="⚠️ HONEYPOT CHANNEL",
+        description=(
+            "This channel is a **trap for raiders and spam bots**.\n\n"
+            "**Anyone who sends a message here will be automatically banned.**\n\n"
+            "If you are a normal member and can see this: **do not type anything.** "
+            "Leave this channel."
+        ),
+        color=0xF04438,
+    )
+    emb.set_footer(text="OmniBot honeypot · messages here = ban")
+    return await channel.send(embed=emb)
+
+
+async def delete_honeypot_warning(guild: discord.Guild, data: dict) -> None:
+    """Delete the stored honeypot warning message if present."""
+    hp = data.get("honeypot") or {}
+    ch_id = hp.get("channelId")
+    msg_id = hp.get("warningMessageId")
+    if not ch_id or not msg_id:
+        return
+    ch = guild.get_channel(int(ch_id))
+    if not isinstance(ch, discord.TextChannel):
+        return
+    try:
+        msg = await ch.fetch_message(int(msg_id))
+        await msg.delete()
+    except Exception:
+        pass
 
 
 class EngagementExtra(commands.Cog):
@@ -309,40 +333,49 @@ class EngagementExtra(commands.Cog):
         channel: discord.TextChannel,
         enabled: bool = True,
     ):
-        def mut(d):
-            d["honeypot"] = {"enabled": enabled, "channelId": str(channel.id)}
+        data = storage.load_guild(interaction.guild.id)
 
-        storage.update_guild(interaction.guild.id, mut)
+        if not enabled:
+            # Delete previous warning if any
+            if interaction.guild:
+                await delete_honeypot_warning(interaction.guild, data)
 
-        if enabled:
-            emb = discord.Embed(
-                title="⚠️ HONEYPOT CHANNEL",
-                description=(
-                    "This channel is a **trap for raiders and spam bots**.\n\n"
-                    "**Anyone who sends a message here will be automatically banned.**\n\n"
-                    "If you are a normal member and can see this: **do not type anything.** "
-                    "Leave this channel."
-                ),
-                color=0xF04438,
-            )
-            emb.set_footer(text="OmniBot honeypot · messages here = ban")
-            try:
-                await channel.send(embed=emb)
-            except Exception as e:
-                await interaction.response.send_message(
-                    f"Honeypot enabled on {channel.mention}, but could not post warning: {e}",
-                    ephemeral=True,
-                )
-                return
+            def mut_off(d):
+                hp = d.setdefault("honeypot", {})
+                hp["enabled"] = False
+                hp.pop("warningMessageId", None)
+
+            storage.update_guild(interaction.guild.id, mut_off)
             await interaction.response.send_message(
-                f"Honeypot **enabled** on {channel.mention}. Warning message posted.",
+                f"Honeypot **disabled**. Warning message removed if it was still there.",
                 ephemeral=True,
             )
-        else:
+            return
+
+        # Enabling: remove old warning first, then post new one
+        await delete_honeypot_warning(interaction.guild, data)
+        warning_msg = None
+        try:
+            warning_msg = await post_honeypot_warning(channel)
+        except Exception as e:
             await interaction.response.send_message(
-                f"Honeypot **disabled** on {channel.mention}.",
+                f"Could not post honeypot warning in {channel.mention}: {e}",
                 ephemeral=True,
             )
+            return
+
+        def mut_on(d):
+            d["honeypot"] = {
+                "enabled": True,
+                "channelId": str(channel.id),
+                "warningMessageId": str(warning_msg.id) if warning_msg else None,
+            }
+
+        storage.update_guild(interaction.guild.id, mut_on)
+        await interaction.response.send_message(
+            f"Honeypot **enabled** on {channel.mention}. Warning message posted.",
+            ephemeral=True,
+        )
 
     @engage.command(name="booster-setup", description="Celebrate server boosts in a channel")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -406,7 +439,6 @@ class EngagementExtra(commands.Cog):
 
         hp = data.get("honeypot") or {}
         if hp.get("enabled") and str(cid) == str(hp.get("channelId")):
-            # Don't ban staff / people with ban perms (avoid self-ban accidents)
             if isinstance(message.author, discord.Member):
                 if (
                     message.author.guild_permissions.ban_members
