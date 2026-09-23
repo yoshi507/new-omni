@@ -1,1 +1,106 @@
-PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>OmniBot Dashboard</title>
+<style>
+:root{--bg:#0b0d12;--sidebar:#0e1118;--panel:#141824;--panel2:#1a1f2e;--border:#252b3b;--text:#eef0f6;--muted:#8b93a7;--accent:#5b6cff;--ok:#3dd68c;--danger:#f04438;--radius:14px}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text)}a{color:var(--accent);text-decoration:none}button,input,select,textarea{font:inherit}
+.btn{appearance:none;border:0;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px}.btn-primary{background:var(--accent);color:#fff}.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}.btn-ghost{background:var(--panel2);color:var(--text)}
+.landing{min-height:100%;display:flex;flex-direction:column}
+.landing-nav{display:flex;justify-content:center;align-items:center;padding:20px 28px;border-bottom:1px solid var(--border)}
+.brand{font-weight:800;font-size:1.25rem}.brand span{color:var(--accent)}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 20px}
+.hero h1{font-size:clamp(2rem,5vw,3.2rem);margin:0 0 12px}.hero p{color:var(--muted);max-width:540px;line-height:1.6;margin:0 0 28px}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.status-dot{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--muted)}.status-dot i{width:8px;height:8px;border-radius:50%;background:#555}.status-dot.ok i{background:var(--ok)}
+.landing-footer{padding:20px 28px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;gap:16px;justify-content:center}
+.app{display:none;height:100vh}.app.on{display:grid;grid-template-columns:260px 1fr}
+.sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 14px}
+.side-brand{font-weight:800;padding:6px 10px 18px}.side-brand span{color:var(--accent)}
+.side-nav{display:flex;flex-direction:column;gap:4px;flex:1;overflow:auto}
+.side-nav button{text-align:left;background:transparent;border:0;color:var(--muted);padding:10px 12px;border-radius:10px;cursor:pointer}
+.side-nav button.active{background:rgba(91,108,255,.15);color:#c5cbff}
+.side-user{border-top:1px solid var(--border);padding-top:14px;margin-top:12px;color:var(--muted)}
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border)}
+.topbar h2{margin:0;font-size:1.15rem}.content{flex:1;overflow:auto;padding:24px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px}.card h3{margin:0 0 6px}.card .desc{color:var(--muted);font-size:.88rem;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.stat{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:16px}.stat .label{color:var(--muted);font-size:.8rem}.stat .value{font-size:1.5rem;font-weight:700;margin-top:4px}
+.server-card{display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--panel);cursor:pointer}.server-card img,.avatar{width:44px;height:44px;border-radius:12px;object-fit:cover;background:#222}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}.toggle-row:last-child{border-bottom:0}
+.switch{width:46px;height:26px;border-radius:999px;background:#2a3144;position:relative;cursor:pointer;flex-shrink:0}.switch.on{background:var(--accent)}.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff}.switch.on::after{left:23px}
+label.field{display:block;margin-top:14px;font-size:.85rem;color:var(--muted)}
+label.field input,label.field select,label.field textarea{width:100%;margin-top:6px;background:#0c0f16;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:11px 12px}
+label.field textarea{min-height:100px;resize:vertical}
+.toast{position:fixed;bottom:24px;right:24px;background:#1c2333;border:1px solid var(--border);padding:12px 16px;border-radius:12px;display:none;z-index:50}.toast.show{display:block}
+.hidden{display:none!important}.menu-btn{display:none}
+@media(max-width:860px){.app.on{grid-template-columns:1fr}.sidebar{position:fixed;inset:0 auto 0 0;width:min(280px,85vw);z-index:40;transform:translateX(-105%)}.sidebar.open{transform:none}.menu-btn{display:inline-flex!important}}
+</style></head><body>
+<div id="landing" class="landing">
+  <div class="landing-nav"><div class="brand">Omni<span>Bot</span></div></div>
+  <div class="hero">
+    <h1>Control every server<br/>from one dashboard</h1>
+    <p>AI, moderation, music, economy and more — configured live.</p>
+    <div class="hero-actions">
+      <a class="btn btn-secondary" href="https://discord.com/oauth2/authorize?client_id=1538542627882799155" target="_blank" rel="noopener">Add to Discord</a>
+      <a class="btn btn-primary" href="/auth/login">Open dashboard</a>
+    </div>
+    <div class="status-dot" id="bot-status"><i></i> Checking…</div>
+  </div>
+  <div class="landing-footer"><a href="/tos">Terms</a><a href="/privacy-policy">Privacy</a></div>
+</div>
+<div id="app" class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-brand">Omni<span>Bot</span></div>
+    <nav class="side-nav" id="side-nav">
+      <button data-view="servers" class="active">Servers</button>
+      <button data-view="overview" class="needs-guild hidden">Overview</button>
+      <button data-view="ai" class="needs-guild hidden">AI & Personality</button>
+      <button data-view="moderation" class="needs-guild hidden">Moderation</button>
+      <button data-view="engagement" class="needs-guild hidden">Engagement</button>
+      <button data-view="music" class="needs-guild hidden">Music</button>
+      <button data-view="logging" class="needs-guild hidden">Logging</button>
+      <button data-view="tickets" class="needs-guild hidden">Tickets</button>
+      <button data-view="fun" class="needs-guild hidden">Economy & Fun</button>
+      <button data-view="voice" class="needs-guild hidden">Voice</button>
+    </nav>
+    <div class="side-user"><div id="user-label">—</div>
+      <button class="btn btn-secondary" id="btn-logout" style="margin-top:10px;width:100%">Log out</button></div>
+  </aside>
+  <div class="main"><div class="topbar"><div style="display:flex;gap:10px;align-items:center">
+    <button class="btn btn-ghost menu-btn" id="menu-btn">☰</button><h2 id="page-title">Servers</h2></div></div>
+    <div class="content" id="content"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const S={user:null,guilds:[],guildId:null,guildName:'',settings:{},bot:{},channels:[],roles:[],view:'servers'};
+const SECTIONS={
+  overview:null,
+  ai:[{id:'ai.enabled',label:'Enable AI',type:'bool'},{id:'ai.naturalInvocation',label:'Natural omni messages',type:'bool'},{id:'ai.memoryEnabled',label:'Conversation memory',type:'bool'},{id:'ai.commandPrefix',label:'Command prefix',type:'text'},{id:'ai.personality',label:'Custom personality',type:'textarea'}],
+  moderation:[{id:'moderation.automodEnabled',label:'Word filter automod',type:'bool'},{id:'moderation.antiSpamEnabled',label:'Anti-spam',type:'bool'},{id:'moderation.blockedWords',label:'Blocked words',type:'textarea'},{id:'security.enabled',label:'Anti-nuke monitoring',type:'bool'},{id:'security.mode',label:'Security mode',type:'select',options:['monitor','alert','lockdown']},{id:'honeypot.enabled',label:'Honeypot protection',type:'bool',hint:'Ban anyone who posts in the honeypot channel'},{id:'honeypot.channelId',label:'Honeypot channel',type:'channel'}],
+  engagement:[{id:'welcome.enabled',label:'Welcome messages',type:'bool'},{id:'welcome.channelId',label:'Welcome channel',type:'channel'},{id:'welcome.message',label:'Welcome text',type:'textarea'},{id:'goodbye.enabled',label:'Goodbye messages',type:'bool'},{id:'goodbye.channelId',label:'Goodbye channel',type:'channel'},{id:'goodbye.message',label:'Goodbye text',type:'textarea'},{id:'deadchat.enabled',label:'Dead Chat Reviver',type:'bool'},{id:'deadchat.minutes',label:'Minutes of silence',type:'number'},{id:'deadchat.channelId',label:'Dead chat channel',type:'channel'},{id:'deadchat.message',label:'Custom revive message',type:'textarea'},{id:'leveling.enabled',label:'Leveling / XP',type:'bool'},{id:'leveling.announce',label:'Announce level-ups',type:'bool'},{id:'autorole.enabled',label:'Autorole',type:'bool'},{id:'autorole.roleId',label:'Autorole role',type:'role'},{id:'starboard.enabled',label:'Starboard',type:'bool'},{id:'starboard.channelId',label:'Starboard channel',type:'channel'},{id:'stickyRoles.enabled',label:'Sticky roles',type:'bool'},{id:'counting.enabled',label:'Counting',type:'bool'},{id:'counting.channelId',label:'Counting channel',type:'channel'},{id:'wordchain.enabled',label:'Word-chain',type:'bool'},{id:'wordchain.channelId',label:'Word-chain channel',type:'channel'},{id:'verification.enabled',label:'Verification',type:'bool'},{id:'verification.roleId',label:'Verified role',type:'role'},{id:'booster.enabled',label:'Booster messages',type:'bool'},{id:'booster.channelId',label:'Booster channel',type:'channel'}],
+  music:[{id:'music.enabled',label:'Enable music',type:'bool'},{id:'music.defaultVolume',label:'Default volume',type:'number'}],
+  logging:[{id:'logging.enabled',label:'Enable logging',type:'bool'},{id:'logging.channelId',label:'Log channel',type:'channel'},{id:'logging.voice',label:'Log voice',type:'bool'}],
+  tickets:[{id:'tickets.enabled',label:'Enable tickets',type:'bool'},{id:'tickets.categoryId',label:'Ticket category ID (from /ticket setup)',type:'text'},{id:'tickets.logChannelId',label:'Ticket log channel',type:'channel'},{id:'tickets.staffRoleId',label:'Staff role (sees tickets)',type:'role'},{id:'tickets.panelChannelId',label:'Channel to post ticket panel',type:'channel'}],
+  fun:[{id:'economy.enabled',label:'Enable economy',type:'bool'}],
+  voice:[{id:'tempVoice.enabled',label:'Join-to-create temp voice',type:'bool'},{id:'tempVoice.lobbyChannelId',label:'Lobby voice channel',type:'channel'}],
+};
+async function api(path,opts={}){const r=await fetch(path,{credentials:'include',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});if(!r.ok){let msg=r.statusText;try{const j=await r.json();msg=j.detail||j.message||msg}catch{}throw new Error(typeof msg==='string'?msg:JSON.stringify(msg))}const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text()}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+function showLanding(on){document.getElementById('landing').style.display=on?'flex':'none';document.getElementById('app').classList.toggle('on',!on)}
+async function refreshAuth(){try{const me=await api('/auth/me');S.user=me.user;document.getElementById('user-label').textContent=me.user.username||me.user.global_name||'User';return true}catch{S.user=null;return false}}
+function setView(view){S.view=view;document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));document.querySelectorAll('.needs-guild').forEach(b=>b.classList.toggle('hidden',!S.guildId));const titles={servers:'Your servers',overview:'Overview',ai:'AI & Personality',moderation:'Moderation',engagement:'Engagement',music:'Music',logging:'Logging',tickets:'Tickets',fun:'Economy & Fun',voice:'Voice'};document.getElementById('page-title').textContent=titles[view]||view;render();document.getElementById('sidebar').classList.remove('open')}
+async function loadGuilds(){const data=await api('/guilds');S.guilds=data.guilds||[]}
+let _opening=false;
+async function openGuild(id,name){if(_opening)return;_opening=true;try{S.guildId=id;S.guildName=name||id;toast('Loading server…');const data=await api(`/guilds/${id}/bundle`);S.settings=data.settings||{};S.bot=data.bot||{};S.channels=data.channels||[];S.roles=data.roles||[];toast(`Loaded ${S.channels.length} channels · ${S.roles.length} roles`);setView('overview')}catch(e){toast(e.message||'Failed')}finally{_opening=false}}
+function renderServers(){if(!S.guilds.length)return `<div class="card"><h3>No servers yet</h3><p class="desc">Add OmniBot where you have Manage Server.</p></div>`;return `<div class="grid">${S.guilds.map(g=>`<div class="server-card" data-id="${g.id}" data-name="${String(g.name||'').replace(/"/g,'"')}">${g.icon?`<img src="${g.icon}">`:`<div class="avatar"></div>`}<div><strong>${g.name}</strong><div style="color:var(--muted);font-size:.8rem">${g.id}</div></div></div>`).join('')}</div>`}
+function renderOverview(){const b=S.bot;return `<div class="grid"><div class="stat"><div class="label">Bot</div><div class="value" style="color:${b.online?'var(--ok)':'var(--danger)'}">${b.online?'Online':'Offline'}</div></div><div class="stat"><div class="label">Members</div><div class="value">${b.memberCount??'—'}</div></div><div class="stat"><div class="label">AI today</div><div class="value">${(b.aiUsage&&b.aiUsage.count)||0}<span style="font-size:.9rem;color:var(--muted)"> / ${(b.aiUsage&&b.aiUsage.limit)||20}</span></div></div><div class="stat"><div class="label">Server</div><div class="value" style="font-size:1.1rem">${S.guildName}</div></div></div><div class="card" style="margin-top:16px"><h3>Channels loaded: ${(S.channels||[]).length} · Roles: ${(S.roles||[]).length}</h3></div>`}
+function channelOptions(selected){const opts=[`<option value="">— none —</option>`];for(const c of(S.channels||[])){const sel=String(selected||'')===String(c.id)?'selected':'';opts.push(`<option value="${c.id}" ${sel}>#${String(c.name||'').replace(/</g,'')} (${c.type||'channel'})</option>`)}return opts.join('')}
+function roleOptions(selected){const opts=[`<option value="">— none —</option>`];for(const r of(S.roles||[])){if(r.name==='@everyone')continue;const sel=String(selected||'')===String(r.id)?'selected':'';opts.push(`<option value="${r.id}" ${sel}>@${String(r.name||'').replace(/</g,'')}</option>`)}return opts.join('')}
+function renderSettings(keys){if(!keys)return renderOverview();const rows=keys.map(f=>{const val=S.settings[f.id];if(f.type==='bool')return `<div class="toggle-row"><div><div>${f.label}</div>${f.hint?`<div class="desc" style="margin:0">${f.hint}</div>`:''}</div><div class="switch ${val?'on':''}" data-id="${f.id}"></div></div>`;if(f.type==='channel')return `<label class="field">${f.label}<select data-id="${f.id}">${channelOptions(val)}</select></label>`;if(f.type==='role')return `<label class="field">${f.label}<select data-id="${f.id}">${roleOptions(val)}</select></label>`;if(f.type==='select')return `<label class="field">${f.label}<select data-id="${f.id}">${(f.options||[]).map(o=>`<option ${val===o?'selected':''}>${o}</option>`).join('')}</select></label>`;if(f.type==='textarea')return `<label class="field">${f.label}<textarea data-id="${f.id}">${val??''}</textarea></label>`;return `<label class="field">${f.label}<input data-id="${f.id}" type="${f.type==='number'?'number':'text'}" value="${val??''}"></label>`}).join('');const extra=(S.view==='tickets')?`<button class="btn btn-secondary" id="btn-ticket-panel" style="margin-top:12px;margin-left:8px">Post ticket panel</button><p class="desc" style="margin-top:8px">1) /ticket setup + staff role · 2) /ticket button add (custom buttons) · 3) Pick panel channel · 4) Save · 5) Post panel</p>`:'';return `<div class="card"><h3>${S.guildName}</h3><p class="desc">${(S.channels||[]).length} channels · ${(S.roles||[]).length} roles</p>${rows}<button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button>${extra}</div>`}
+async function render(){const c=document.getElementById('content');if(S.view==='servers')c.innerHTML=renderServers();else if(S.view==='overview')c.innerHTML=renderOverview();else c.innerHTML=renderSettings(SECTIONS[S.view]);bind()}
+function bind(){document.querySelectorAll('.server-card[data-id]').forEach(el=>{el.onclick=()=>openGuild(el.dataset.id,el.dataset.name)});document.querySelectorAll('.switch[data-id]').forEach(el=>{el.onclick=()=>el.classList.toggle('on')});const save=document.getElementById('btn-save');if(save)save.onclick=async()=>{const patch={};document.querySelectorAll('[data-id]').forEach(el=>{const id=el.dataset.id;if(el.classList.contains('switch'))patch[id]=el.classList.contains('on');else if(el.tagName==='SELECT')patch[id]=el.value;else if(el.type==='number')patch[id]=Number(el.value);else patch[id]=el.value});try{await api(`/guilds/${S.guildId}/settings`,{method:'PUT',body:JSON.stringify({patch})});Object.assign(S.settings,patch);toast('Saved')}catch(e){toast(e.message)}};const panelBtn=document.getElementById('btn-ticket-panel');if(panelBtn)panelBtn.onclick=async()=>{const ch=(document.querySelector('[data-id="tickets.panelChannelId"]')||{}).value||S.settings['tickets.panelChannelId'];if(!ch){toast('Pick a panel channel first, then Save, then post.');return}try{await api(`/guilds/${S.guildId}/tickets/panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch)})});toast('Ticket panel posted')}catch(e){toast(e.message)}}}
+document.getElementById('side-nav').onclick=e=>{const b=e.target.closest('button[data-view]');if(b)setView(b.dataset.view)};
+document.getElementById('btn-logout').onclick=async()=>{try{await api('/auth/logout',{method:'POST'})}catch{}location.href='/'};
+document.getElementById('menu-btn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+(async()=>{try{const v=await api('/version');const st=document.getElementById('bot-status');if(v.discordReady){st.classList.add('ok');st.innerHTML='<i></i> Bot online'}else st.innerHTML='<i></i> Bot offline'}catch{document.getElementById('bot-status').innerHTML='<i></i> API unreachable'}if(await refreshAuth()){showLanding(false);try{await loadGuilds()}catch(e){toast(e.message)}setView('servers')}else showLanding(true)})();
+</script></body></html>
