@@ -11,18 +11,9 @@ from discord.ext import commands, tasks
 
 from omnibot import storage
 from omnibot.services import groq_client
+from omnibot.services.question_packs import pick_question
 
-# Match omni / omnibot / OmniBot anywhere in the message (word boundary)
 NATURAL_TRIGGER = re.compile(r"\b(?:omni(?:bot)?)\b", re.I)
-
-DEAD_CHAT_PROMPTS = [
-    "Anyone still around? Drop a 👋 if you're here!",
-    "Chat's been quiet… what's everyone up to?",
-    "Dead chat? Not on my watch. Say hi!",
-    "Random question: coffee or tea?",
-    "Bump! What's the best thing that happened today?",
-    "Hey {server} — let's get this chat moving again 🔥",
-]
 
 
 class Events(commands.Cog):
@@ -92,34 +83,31 @@ class Events(commands.Cog):
                 threshold = minutes * 60
                 now = time.time()
                 last_map = dc.get("lastMessageAt") or {}
-                channel_ids = []
                 only = dc.get("channelId")
-                if only:
-                    channel_ids = [str(only)]
-                else:
-                    channel_ids = list(last_map.keys())
+                channel_ids = [str(only)] if only else list(last_map.keys())
                 for cid in channel_ids:
                     key = f"{guild.id}:{cid}"
                     if now - self._dead_cd.get(key, 0) < threshold:
                         continue
                     last = float(last_map.get(cid) or 0)
-                    if last and (now - last) < threshold:
-                        continue
-                    if not last:
+                    if not last or (now - last) < threshold:
                         continue
                     ch = guild.get_channel(int(cid))
                     if not isinstance(ch, discord.TextChannel):
                         continue
-                    prompt = random.choice(DEAD_CHAT_PROMPTS).replace("{server}", guild.name)
-                    custom = (dc.get("message") or "").strip()
-                    if custom:
-                        prompt = custom.replace("{server}", guild.name)
+                    question = pick_question(dc.get("packs"), dc.get("customQuestions"))
+                    emb = discord.Embed(
+                        title="💬 Chat's been quiet…",
+                        description=question,
+                        color=0x5B6CFF,
+                    )
+                    emb.set_footer(text="Dead chat reviver · answer away!")
                     try:
-                        await ch.send(prompt)
+                        await ch.send(embed=emb)
                         self._dead_cd[key] = now
 
-                        def mut(d):
-                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[cid] = time.time()
+                        def mut(d, _cid=cid):
+                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[_cid] = time.time()
 
                         storage.update_guild(guild.id, mut)
                     except Exception:
@@ -132,20 +120,15 @@ class Events(commands.Cog):
         await self.bot.wait_until_ready()
 
     def _extract_natural_prompt(self, content: str, guild: discord.Guild) -> str | None:
-        """If message mentions omni/omnibot/OmniBot (or bot nick) anywhere, return the prompt."""
         text = content.strip()
         if not text:
             return None
 
-        # Anywhere: omni / omnibot
         if NATURAL_TRIGGER.search(text):
-            # Strip trigger words; keep the rest as the question
             cleaned = NATURAL_TRIGGER.sub(" ", text)
             cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
-            # If they only said "omni" with nothing else, treat as a greeting
             return cleaned or "hi"
 
-        # Bot nickname at start (legacy)
         me = guild.me
         if me and me.nick:
             nick = me.nick.strip()
@@ -154,12 +137,7 @@ class Events(commands.Cog):
             if low.startswith(nlow + " ") or low.startswith(nlow + ",") or low.startswith(nlow + ":"):
                 return text[len(nick) :].lstrip(" ,:").strip() or "hi"
 
-        # @mention of the bot anywhere
-        if me and me.mentioned_in(
-            type("M", (), {"mentions": [], "content": text, "role_mentions": []})()  # fallback below
-        ):
-            pass
-        if me and f"<@{me.id}>" in text or (me and f"<@!{me.id}>" in text):
+        if me and (f"<@{me.id}>" in text or f"<@!{me.id}>" in text):
             cleaned = text.replace(f"<@{me.id}>", " ").replace(f"<@!{me.id}>", " ")
             cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
             return cleaned or "hi"
@@ -252,7 +230,6 @@ class Events(commands.Cog):
         if not message.content:
             return
 
-        # Mentions: if bot is mentioned, always treat as AI prompt
         prompt = None
         me = message.guild.me
         if me and me in message.mentions:
