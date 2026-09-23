@@ -1,9 +1,8 @@
-"""Appeals, giveaways, reaction roles, advertise, partner, captcha, userphone, quiz, translate."""
+"""Community tools: giveaways, reaction roles, partner, captcha, userphone, quiz, translate."""
 from __future__ import annotations
 
 import random
 import time
-import uuid
 
 import discord
 from discord import app_commands
@@ -17,118 +16,7 @@ class Community(commands.Cog):
         self.bot = bot
         self._userphone: dict[int, int] = {}  # channel -> partner channel
 
-    # —— Appeals ——
-    appeal = app_commands.Group(name="appeal", description="Ban/timeout/warn appeals")
-
-    @appeal.command(name="setup", description="Enable appeals and set review channel")
-    @app_commands.default_permissions(manage_guild=True)
-    async def appeal_setup(
-        self, interaction: discord.Interaction, channel: discord.TextChannel, enabled: bool = True
-    ):
-        def mut(d):
-            ap = d.setdefault("appeals", {})
-            ap["enabled"] = enabled
-            ap["channelId"] = str(channel.id)
-
-        storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message(
-            f"Appeals {'enabled' if enabled else 'disabled'}. Channel: {channel.mention}"
-        )
-
-    @appeal.command(name="list", description="List pending appeals")
-    @app_commands.default_permissions(moderate_members=True)
-    async def appeal_list(self, interaction: discord.Interaction):
-        data = storage.load_guild(interaction.guild.id)  # type: ignore
-        recs = data.get("appealsRecords") or {}
-        pending = [v for v in recs.values() if v.get("status") == "pending"]
-        if not pending:
-            return await interaction.response.send_message("No pending appeals.", ephemeral=True)
-        lines = [
-            f"`{r['id']}` <@{r['userId']}> {r.get('punishment')} — {r.get('reason', '')[:80]}"
-            for r in pending[:20]
-        ]
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
-
-    @appeal.command(name="accept", description="Accept an appeal (unban/unmute/clear warn as applicable)")
-    @app_commands.default_permissions(ban_members=True)
-    async def appeal_accept(self, interaction: discord.Interaction, appeal_id: str):
-        data = storage.load_guild(interaction.guild.id)  # type: ignore
-        rec = (data.get("appealsRecords") or {}).get(appeal_id)
-        if not rec:
-            return await interaction.response.send_message("Unknown appeal id.", ephemeral=True)
-        uid = int(rec["userId"])
-        ptype = rec.get("punishment", "ban")
-        try:
-            if ptype == "ban":
-                await interaction.guild.unban(discord.Object(id=uid), reason=f"Appeal {appeal_id}")  # type: ignore
-            elif ptype == "timeout":
-                member = interaction.guild.get_member(uid)  # type: ignore
-                if member:
-                    await member.timeout(None, reason=f"Appeal {appeal_id}")
-            elif ptype == "warn":
-
-                def mut_w(d):
-                    (d.get("warnings") or {}).pop(str(uid), None)
-
-                storage.update_guild(interaction.guild.id, mut_w)  # type: ignore
-        except Exception as e:
-            await interaction.response.send_message(f"Action failed: {e}", ephemeral=True)
-            return
-
-        def mut(d):
-            r = (d.get("appealsRecords") or {}).get(appeal_id)
-            if r:
-                r["status"] = "accepted"
-
-        storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message(f"Appeal `{appeal_id}` accepted.")
-
-    @appeal.command(name="reject", description="Reject an appeal")
-    @app_commands.default_permissions(moderate_members=True)
-    async def appeal_reject(self, interaction: discord.Interaction, appeal_id: str):
-        def mut(d):
-            r = (d.get("appealsRecords") or {}).get(appeal_id)
-            if r:
-                r["status"] = "rejected"
-            else:
-                raise RuntimeError("missing")
-
-        try:
-            storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        except RuntimeError:
-            return await interaction.response.send_message("Unknown appeal.", ephemeral=True)
-        await interaction.response.send_message(f"Appeal `{appeal_id}` rejected.")
-
-    # —— Advertise ——
-    @app_commands.command(name="advertise", description="List this server on the public advertise board")
-    @app_commands.default_permissions(manage_guild=True)
-    async def advertise(
-        self,
-        interaction: discord.Interaction,
-        description: str,
-        category: str = "General",
-        invite: str | None = None,
-    ):
-        inv = invite
-        if not inv:
-            try:
-                inv_obj = await interaction.channel.create_invite(max_age=0, max_uses=0)  # type: ignore
-                inv = inv_obj.url
-            except Exception:
-                inv = None
-
-        def mut(d):
-            d["advertise"] = {
-                "listed": True,
-                "description": description[:500],
-                "category": category[:40],
-                "invite": inv,
-            }
-
-        storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message("Server listed on the advertise board.")
-
-    # —— Partner / affiliate stubs ——
+    # —— Partner / affiliate ——
     @app_commands.command(name="partner", description="Record a partnership with another server")
     @app_commands.default_permissions(manage_guild=True)
     async def partner(self, interaction: discord.Interaction, other_server_id: str, note: str = ""):
@@ -180,7 +68,6 @@ class Community(commands.Cog):
         try:
             import httpx
 
-            # LibreTranslate public instances vary; best-effort
             async with httpx.AsyncClient(timeout=20.0) as client:
                 r = await client.post(
                     "https://libretranslate.com/translate",
@@ -205,14 +92,15 @@ class Community(commands.Cog):
             ("Planet known as the Red Planet?", "mars"),
         ]
         q, a = random.choice(qs)
-        await interaction.response.send_message(f"**Quiz:** {q}\n*(Answer in chat — staff can score manually)*")
+        await interaction.response.send_message(
+            f"**Quiz:** {q}\n*(Answer in chat — staff can score manually)*"
+        )
 
     # —— Userphone ——
     @app_commands.command(name="userphone", description="Anonymous cross-server chat bridge")
     async def userphone(self, interaction: discord.Interaction):
         if not isinstance(interaction.channel, discord.TextChannel):
             return await interaction.response.send_message("Text only.", ephemeral=True)
-        # Pair with another waiting channel if any
         waiting = getattr(self.bot, "_up_wait", None)
         if waiting and waiting != interaction.channel.id:
             self._userphone[waiting] = interaction.channel.id
@@ -243,7 +131,11 @@ class Community(commands.Cog):
     @app_commands.command(name="reactionrole", description="Create a reaction-role message")
     @app_commands.default_permissions(manage_roles=True)
     async def reactionrole(
-        self, interaction: discord.Interaction, role: discord.Role, emoji: str, label: str = "React for role"
+        self,
+        interaction: discord.Interaction,
+        role: discord.Role,
+        emoji: str,
+        label: str = "React for role",
     ):
         msg = await interaction.channel.send(f"{label}\nReact with {emoji} for {role.mention}")  # type: ignore
         try:
