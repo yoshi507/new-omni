@@ -60,6 +60,47 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             raise HTTPException(401, "Not authenticated")
         return s["user"], s
 
+    async def _user_guilds(sess: dict[str, Any]) -> list[dict[str, Any]]:
+        cached = sessions.get_cached_guilds(sess)
+        if cached is not None:
+            return cached
+        raw = await oauth.fetch_user_guilds(sess["access_token"])
+        sessions.set_cached_guilds(sess, raw)
+        return raw
+
+    async def _assert_guild_access(request: Request, guild_id: str) -> None:
+        user, sess = require_user(request)
+        b = app.state.bot
+
+        # Validate snowflake before int()
+        gid = str(guild_id).strip()
+        if not gid.isdigit():
+            raise HTTPException(400, f"Invalid guild id: {guild_id!r}")
+
+        if not b or not b.is_ready():
+            raise HTTPException(503, "Bot is still starting, try again in a moment")
+
+        g = b.get_guild(int(gid))
+        if not g:
+            # Bot may still be chunking; one short retry
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(0.35)
+            g = b.get_guild(int(gid))
+        if not g:
+            raise HTTPException(404, "Bot is not in that server")
+
+        try:
+            raw = await _user_guilds(sess)
+        except Exception as e:
+            log.warning("fetch_user_guilds failed: %s", e)
+            raise HTTPException(502, "Could not verify guild access")
+
+        for ug in raw:
+            if str(ug.get("id")) == gid and oauth.can_manage(ug):
+                return
+        raise HTTPException(403, "You cannot manage this server")
+
     @app.get("/health")
     async def health():
         b = app.state.bot
@@ -132,7 +173,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
     async def list_guilds(request: Request):
         user, sess = require_user(request)
         try:
-            raw = await oauth.fetch_user_guilds(sess["access_token"])
+            raw = await _user_guilds(sess)
         except Exception:
             raise HTTPException(502, "Failed to fetch Discord guilds")
         bot = app.state.bot
@@ -201,13 +242,15 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         b = app.state.bot
         g = b.get_guild(int(guild_id)) if b else None
         if not g:
+            log.warning("channels: bot has no guild %s (ready=%s)", guild_id, getattr(b, "is_ready", lambda: None)())
             return {"channels": []}
-        return {
-            "channels": [
-                {"id": str(c.id), "name": c.name, "type": str(c.type)}
-                for c in g.channels
-            ]
-        }
+        out = []
+        for c in g.channels:
+            # discord.py ChannelType: use .value (int) and .name for clarity
+            ctype = getattr(c.type, "name", None) or str(c.type)
+            out.append({"id": str(c.id), "name": c.name, "type": ctype})
+        log.info("channels: guild=%s count=%s", guild_id, len(out))
+        return {"channels": out}
 
     @app.get("/guilds/{guild_id}/roles")
     async def guild_roles(guild_id: str, request: Request):
@@ -216,9 +259,9 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         g = b.get_guild(int(guild_id)) if b else None
         if not g:
             return {"roles": []}
-        return {
-            "roles": [{"id": str(r.id), "name": r.name, "color": r.color.value} for r in g.roles]
-        }
+        out = [{"id": str(r.id), "name": r.name, "color": r.color.value} for r in g.roles]
+        log.info("roles: guild=%s count=%s", guild_id, len(out))
+        return {"roles": out}
 
     @app.get("/appeals/servers")
     async def appeals_servers():
@@ -262,7 +305,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
 
         storage.update_guild(body.guild_id, mut)
 
-        # Post to channel if possible
         b = app.state.bot
         ch_id = ap.get("channelId")
         if b and ch_id:
@@ -299,27 +341,78 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                     )
         return {"servers": out}
 
-    async def _assert_guild_access(request: Request, guild_id: str):
+    async def _user_guilds(sess: dict[str, Any]) -> list[dict[str, Any]]:
+        cached = sessions.get_cached_guilds(sess)
+        if cached is not None:
+            return cached
+        raw = await oauth.fetch_user_guilds(sess["access_token"])
+        sessions.set_cached_guilds(sess, raw)
+        return raw
+
+    async def _assert_guild_access(request: Request, guild_id: str) -> None:
         user, sess = require_user(request)
         b = app.state.bot
-        if not b or not b.is_ready() or not b.get_guild(int(guild_id)):
+
+        gid = str(guild_id).strip()
+        if not gid.isdigit():
+            raise HTTPException(400, f"Invalid guild id: {guild_id!r}")
+
+        if not b or not b.is_ready():
+            raise HTTPException(503, "Bot is still starting, try again in a moment")
+
+        g = b.get_guild(int(gid))
+        if not g:
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(0.35)
+            g = b.get_guild(int(gid))
+        if not g:
             raise HTTPException(404, "Bot is not in that server")
+
         try:
-            raw = await oauth.fetch_user_guilds(sess["access_token"])
-        except Exception:
+            raw = await _user_guilds(sess)
+        except Exception as e:
+            log.warning("fetch_user_guilds failed: %s", e)
             raise HTTPException(502, "Could not verify guild access")
-        for g in raw:
-            if str(g["id"]) == str(guild_id) and oauth.can_manage(g):
+
+        for ug in raw:
+            if str(ug.get("id")) == gid and oauth.can_manage(ug):
                 return
         raise HTTPException(403, "You cannot manage this server")
 
-    # Static dashboard
-    if PUBLIC_DIR.is_dir():
-        app.mount("/assets", StaticFiles(directory=str(PUBLIC_DIR)), name="assets")
+    def session_user(request: Request) -> dict | None:
+        sid = request.cookies.get(COOKIE)
+        s = sessions.get(sid)
+        return s["user"] if s else None
+
+    def require_user(request: Request) -> tuple[dict, dict]:
+        sid = request.cookies.get(COOKIE)
+        s = sessions.get(sid)
+        if not s:
+            raise HTTPException(401, "Not authenticated")
+        return s["user"], s
+
+    # Static dashboard — resolve path at request time so nested roots still work
+    def _public_dir() -> Path:
+        # Prefer project root discovered at import, fall back to package-relative
+        for root in (_PROJECT_ROOT if False else [],):
+            pass
+        candidates = [
+            Path(__file__).resolve().parent.parent.parent / "public" / "dashboard",
+            Path.cwd() / "public" / "dashboard",
+        ]
+        for p in candidates:
+            if p.is_dir():
+                return p
+        return candidates[0]
+
+    public_dir = _public_dir()
+    if public_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(public_dir)), name="assets")
 
         @app.get("/")
         async def index():
-            index_path = PUBLIC_DIR / "index.html"
+            index_path = public_dir / "index.html"
             if index_path.exists():
                 return FileResponse(index_path)
             return HTMLResponse("<h1>OmniBot</h1><p>Dashboard files missing.</p>")
@@ -327,7 +420,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         @app.get("/tos")
         @app.get("/terms")
         async def tos():
-            p = PUBLIC_DIR / "tos.html"
+            p = public_dir / "tos.html"
             if p.exists():
                 return FileResponse(p)
             return HTMLResponse("<h1>Terms of Service</h1>")
@@ -335,7 +428,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         @app.get("/privacy-policy")
         @app.get("/privacy")
         async def privacy():
-            p = PUBLIC_DIR / "privacy-policy.html"
+            p = public_dir / "privacy-policy.html"
             if p.exists():
                 return FileResponse(p)
             return HTMLResponse("<h1>Privacy Policy</h1>")
