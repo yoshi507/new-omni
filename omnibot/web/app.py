@@ -310,6 +310,32 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             except Exception as e:
                 log.warning("Honeypot side-effect failed: %s", e)
 
+            # Auto-delete ticket panel when tickets disabled
+            try:
+                before_t = dict(before.get("tickets") or {})
+                after_t = dict(after.get("tickets") or {})
+                was_on = bool(before_t.get("enabled"))
+                now_on = bool(after_t.get("enabled"))
+                if was_on and not now_on:
+                    pch = before_t.get("panelChannelId") or after_t.get("panelChannelId")
+                    pmid = before_t.get("panelMessageId") or after_t.get("panelMessageId")
+                    if pch and pmid:
+                        ch = g.get_channel(int(pch))
+                        if ch:
+                            try:
+                                msg = await ch.fetch_message(int(pmid))
+                                await msg.delete()
+                            except Exception as e:
+                                log.warning("Ticket panel delete failed: %s", e)
+
+                    def clear_panel(d):
+                        t = d.setdefault("tickets", {})
+                        t.pop("panelMessageId", None)
+
+                    storage.update_guild(guild_id, clear_panel)
+            except Exception as e:
+                log.warning("Ticket panel side-effect failed: %s", e)
+
         return {"ok": True}
 
     @app.get("/guilds/{guild_id}/bot")
