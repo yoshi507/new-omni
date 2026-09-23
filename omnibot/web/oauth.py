@@ -1,6 +1,7 @@
 """Discord OAuth2 helpers."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -55,13 +56,26 @@ async def fetch_user(access_token: str) -> dict[str, Any]:
 
 
 async def fetch_user_guilds(access_token: str) -> list[dict[str, Any]]:
+    """Fetch guilds with retry on 429 rate limits."""
+    last_err: Exception | None = None
     async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{API}/users/@me/guilds",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        r.raise_for_status()
-        return r.json()
+        for attempt in range(4):
+            try:
+                r = await client.get(
+                    f"{API}/users/@me/guilds",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                if r.status_code == 429:
+                    retry = float(r.headers.get("Retry-After") or r.json().get("retry_after") or 1.5)
+                    log.warning("Discord guilds rate-limited, sleeping %.1fs", retry)
+                    await asyncio.sleep(min(retry, 5.0))
+                    continue
+                r.raise_for_status()
+                return r.json()
+            except Exception as e:
+                last_err = e
+                await asyncio.sleep(0.4 * (attempt + 1))
+        raise RuntimeError(f"fetch_user_guilds failed: {last_err}")
 
 
 def can_manage(guild: dict[str, Any]) -> bool:

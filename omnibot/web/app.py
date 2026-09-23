@@ -6,13 +6,13 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from omnibot.config import settings, DATA_DIR
+from omnibot.config import settings
 from omnibot import storage
 from omnibot.settings_registry import SETTINGS, get_setting_by_id, validate_setting, get_defaults_flat
 from omnibot.web import sessions, oauth
@@ -30,7 +30,7 @@ class SettingsPatch(BaseModel):
 
 class AppealSubmit(BaseModel):
     guild_id: str
-    punishment_type: str = "ban"  # ban | timeout | warn
+    punishment_type: str = "ban"
     reason: str
     extra: str = ""
 
@@ -61,18 +61,32 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         return s["user"], s
 
     async def _user_guilds(sess: dict[str, Any]) -> list[dict[str, Any]]:
+        """Cached + locked guild list so parallel requests don't rate-limit Discord."""
         cached = sessions.get_cached_guilds(sess)
         if cached is not None:
             return cached
-        raw = await oauth.fetch_user_guilds(sess["access_token"])
-        sessions.set_cached_guilds(sess, raw)
-        return raw
+
+        async with sessions.guilds_lock():
+            # Double-check after acquiring lock
+            cached = sessions.get_cached_guilds(sess)
+            if cached is not None:
+                return cached
+            try:
+                raw = await oauth.fetch_user_guilds(sess["access_token"])
+                sessions.set_cached_guilds(sess, raw)
+                return raw
+            except Exception as e:
+                # Fall back to stale cache if any
+                stale = sessions.get_cached_guilds(sess, allow_stale=True)
+                if stale is not None:
+                    log.warning("Using stale guild cache after error: %s", e)
+                    return stale
+                raise
 
     async def _assert_guild_access(request: Request, guild_id: str) -> None:
         user, sess = require_user(request)
         b = app.state.bot
 
-        # Validate snowflake before int()
         gid = str(guild_id).strip()
         if not gid.isdigit():
             raise HTTPException(400, f"Invalid guild id: {guild_id!r}")
@@ -82,24 +96,52 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
 
         g = b.get_guild(int(gid))
         if not g:
-            # Bot may still be chunking; one short retry
             import asyncio as _asyncio
 
-            await _asyncio.sleep(0.35)
+            await _asyncio.sleep(0.4)
             g = b.get_guild(int(gid))
         if not g:
             raise HTTPException(404, "Bot is not in that server")
 
+        # 1) Preferred: OAuth guild list (cached)
         try:
             raw = await _user_guilds(sess)
+            for ug in raw:
+                if str(ug.get("id")) == gid and oauth.can_manage(ug):
+                    return
         except Exception as e:
-            log.warning("fetch_user_guilds failed: %s", e)
-            raise HTTPException(502, "Could not verify guild access")
+            log.warning("OAuth guild check failed (%s); trying member fallback", e)
 
-        for ug in raw:
-            if str(ug.get("id")) == gid and oauth.can_manage(ug):
+        # 2) Fallback: check member perms via the bot (no Discord OAuth call)
+        try:
+            member = g.get_member(int(user["id"]))
+            if member is None:
+                member = await g.fetch_member(int(user["id"]))
+            if member and (
+                member.guild_permissions.administrator or member.guild_permissions.manage_guild
+            ):
                 return
+        except Exception as e:
+            log.warning("Member fallback failed: %s", e)
+
         raise HTTPException(403, "You cannot manage this server")
+
+    def _channels_payload(g) -> list[dict[str, Any]]:
+        out = []
+        for c in g.channels:
+            tname = getattr(c.type, "name", None) or str(c.type)
+            out.append({"id": str(c.id), "name": c.name, "type": tname})
+        return out
+
+    def _roles_payload(g) -> list[dict[str, Any]]:
+        return [{"id": str(r.id), "name": r.name, "color": r.color.value} for r in g.roles]
+
+    def _settings_payload(guild_id: str) -> dict[str, Any]:
+        data = storage.load_guild(guild_id)
+        flat = {}
+        for s in SETTINGS:
+            flat[s["id"]] = storage.get_path(data, s["path"], s["default"])
+        return flat
 
     @app.get("/health")
     async def health():
@@ -109,7 +151,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             "service": "OmniBot API",
             "discordReady": bool(b and b.is_ready()),
             "guilds": len(b.guilds) if b and b.is_ready() else 0,
-            "uptime": None,
         }
 
     @app.get("/version")
@@ -148,6 +189,14 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             access = token["access_token"]
             user = await oauth.fetch_user(access)
             sid = sessions.create(user, access)
+            # Prefetch guilds into session so first click is fast
+            try:
+                sess = sessions.get(sid)
+                if sess:
+                    raw = await oauth.fetch_user_guilds(access)
+                    sessions.set_cached_guilds(sess, raw)
+            except Exception as e:
+                log.warning("Prefetch guilds failed: %s", e)
             resp = RedirectResponse("/#/servers")
             resp.set_cookie(COOKIE, sid, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 7)
             return resp
@@ -175,7 +224,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         try:
             raw = await _user_guilds(sess)
         except Exception:
-            raise HTTPException(502, "Failed to fetch Discord guilds")
+            raise HTTPException(502, "Failed to fetch Discord guilds — wait a few seconds and refresh")
         bot = app.state.bot
         bot_ids = {str(g.id) for g in bot.guilds} if bot and bot.is_ready() else set()
         out = []
@@ -192,14 +241,33 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             out.append({"id": gid, "name": g.get("name"), "icon": icon_url})
         return {"guilds": out}
 
+    # One request = settings + bot + channels + roles (avoids 4x rate-limit storms)
+    @app.get("/guilds/{guild_id}/bundle")
+    async def guild_bundle(guild_id: str, request: Request):
+        await _assert_guild_access(request, guild_id)
+        b = app.state.bot
+        g = b.get_guild(int(guild_id)) if b else None
+        u = ai_limits.usage(guild_id)
+        channels = _channels_payload(g) if g else []
+        roles = _roles_payload(g) if g else []
+        log.info("bundle guild=%s channels=%s roles=%s", guild_id, len(channels), len(roles))
+        return {
+            "settings": _settings_payload(guild_id),
+            "defaults": get_defaults_flat(),
+            "bot": {
+                "online": bool(b and b.is_ready()),
+                "guildName": g.name if g else None,
+                "memberCount": g.member_count if g else None,
+                "aiUsage": u,
+            },
+            "channels": channels,
+            "roles": roles,
+        }
+
     @app.get("/guilds/{guild_id}/settings")
     async def get_settings(guild_id: str, request: Request):
         await _assert_guild_access(request, guild_id)
-        data = storage.load_guild(guild_id)
-        flat = {}
-        for s in SETTINGS:
-            flat[s["id"]] = storage.get_path(data, s["path"], s["default"])
-        return {"settings": flat, "defaults": get_defaults_flat()}
+        return {"settings": _settings_payload(guild_id), "defaults": get_defaults_flat()}
 
     @app.put("/guilds/{guild_id}/settings")
     async def put_settings(guild_id: str, body: SettingsPatch, request: Request):
@@ -242,15 +310,8 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         b = app.state.bot
         g = b.get_guild(int(guild_id)) if b else None
         if not g:
-            log.warning("channels: bot has no guild %s (ready=%s)", guild_id, getattr(b, "is_ready", lambda: None)())
             return {"channels": []}
-        out = []
-        for c in g.channels:
-            # discord.py ChannelType: use .value (int) and .name for clarity
-            ctype = getattr(c.type, "name", None) or str(c.type)
-            out.append({"id": str(c.id), "name": c.name, "type": ctype})
-        log.info("channels: guild=%s count=%s", guild_id, len(out))
-        return {"channels": out}
+        return {"channels": _channels_payload(g)}
 
     @app.get("/guilds/{guild_id}/roles")
     async def guild_roles(guild_id: str, request: Request):
@@ -259,13 +320,10 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         g = b.get_guild(int(guild_id)) if b else None
         if not g:
             return {"roles": []}
-        out = [{"id": str(r.id), "name": r.name, "color": r.color.value} for r in g.roles]
-        log.info("roles: guild=%s count=%s", guild_id, len(out))
-        return {"roles": out}
+        return {"roles": _roles_payload(g)}
 
     @app.get("/appeals/servers")
     async def appeals_servers():
-        """Public list of guilds with appeals enabled (for Appeal a punishment)."""
         b = app.state.bot
         out = []
         if b and b.is_ready():
@@ -341,72 +399,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                     )
         return {"servers": out}
 
-    async def _user_guilds(sess: dict[str, Any]) -> list[dict[str, Any]]:
-        cached = sessions.get_cached_guilds(sess)
-        if cached is not None:
-            return cached
-        raw = await oauth.fetch_user_guilds(sess["access_token"])
-        sessions.set_cached_guilds(sess, raw)
-        return raw
-
-    async def _assert_guild_access(request: Request, guild_id: str) -> None:
-        user, sess = require_user(request)
-        b = app.state.bot
-
-        gid = str(guild_id).strip()
-        if not gid.isdigit():
-            raise HTTPException(400, f"Invalid guild id: {guild_id!r}")
-
-        if not b or not b.is_ready():
-            raise HTTPException(503, "Bot is still starting, try again in a moment")
-
-        g = b.get_guild(int(gid))
-        if not g:
-            import asyncio as _asyncio
-
-            await _asyncio.sleep(0.35)
-            g = b.get_guild(int(gid))
-        if not g:
-            raise HTTPException(404, "Bot is not in that server")
-
-        try:
-            raw = await _user_guilds(sess)
-        except Exception as e:
-            log.warning("fetch_user_guilds failed: %s", e)
-            raise HTTPException(502, "Could not verify guild access")
-
-        for ug in raw:
-            if str(ug.get("id")) == gid and oauth.can_manage(ug):
-                return
-        raise HTTPException(403, "You cannot manage this server")
-
-    def session_user(request: Request) -> dict | None:
-        sid = request.cookies.get(COOKIE)
-        s = sessions.get(sid)
-        return s["user"] if s else None
-
-    def require_user(request: Request) -> tuple[dict, dict]:
-        sid = request.cookies.get(COOKIE)
-        s = sessions.get(sid)
-        if not s:
-            raise HTTPException(401, "Not authenticated")
-        return s["user"], s
-
-    # Static dashboard — resolve path at request time so nested roots still work
-    def _public_dir() -> Path:
-        # Prefer project root discovered at import, fall back to package-relative
-        for root in (_PROJECT_ROOT if False else [],):
-            pass
-        candidates = [
-            Path(__file__).resolve().parent.parent.parent / "public" / "dashboard",
-            Path.cwd() / "public" / "dashboard",
-        ]
-        for p in candidates:
-            if p.is_dir():
-                return p
-        return candidates[0]
-
-    public_dir = _public_dir()
+    public_dir = PUBLIC_DIR if PUBLIC_DIR.is_dir() else Path.cwd() / "public" / "dashboard"
     if public_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=str(public_dir)), name="assets")
 
@@ -414,7 +407,10 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         async def index():
             index_path = public_dir / "index.html"
             if index_path.exists():
-                return FileResponse(index_path)
+                return FileResponse(
+                    index_path,
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                )
             return HTMLResponse("<h1>OmniBot</h1><p>Dashboard files missing.</p>")
 
         @app.get("/tos")
