@@ -1,9 +1,8 @@
-"""Music — SoundCloud-first + YouTube via yt-dlp with anti-bot client fallbacks."""
+"""Music — SoundCloud only via yt-dlp + FFmpeg."""
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 
 import discord
@@ -15,30 +14,15 @@ from omnibot.services import concurrency
 log = logging.getLogger("omnibot.music")
 _executor = ThreadPoolExecutor(max_workers=2)
 
-# Multiple YouTube clients — android/ios/tv often avoid the "sign in" bot wall
-_YT_CLIENTS = [
-    ["android", "ios", "tv_embedded", "mweb", "web"],
-    ["ios", "android"],
-    ["tv_embedded"],
-]
-
-
-def _base_opts(clients: list[str]) -> dict:
-    opts: dict = {
-        "format": "bestaudio/best",
-        "quiet": True,
-        "no_warnings": True,
-        "default_search": "ytsearch",
-        "noplaylist": True,
-        "source_address": "0.0.0.0",
-        "extractor_args": {"youtube": {"player_client": clients}},
-        # Prefer not to download whole file
-        "skip_download": True,
-    }
-    cookies = os.getenv("YTDLP_COOKIES") or os.getenv("YOUTUBE_COOKIES")
-    if cookies and os.path.isfile(cookies):
-        opts["cookiefile"] = cookies
-    return opts
+SC_OPTS = {
+    "format": "bestaudio/best",
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "scsearch",
+    "noplaylist": True,
+    "source_address": "0.0.0.0",
+    "skip_download": True,
+}
 
 
 def _pick_stream(info: dict) -> str | None:
@@ -51,67 +35,41 @@ def _pick_stream(info: dict) -> str | None:
     return info.get("webpage_url")
 
 
-def _extract_once(query: str, opts: dict) -> dict:
+def _extract(query: str) -> dict:
     import yt_dlp
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(query, download=False)
+    q = query.strip()
+    low = q.lower()
+
+    # Reject YouTube links explicitly
+    if any(x in low for x in ("youtube.com", "youtu.be", "youtube")):
+        raise RuntimeError(
+            "YouTube is not supported. Paste a SoundCloud URL or search by song/artist name."
+        )
+
+    # Force SoundCloud search for plain text; keep direct SC URLs as-is
+    if "soundcloud.com" not in low:
+        # scsearch1: first result only
+        q = f"scsearch1:{q}"
+
+    with yt_dlp.YoutubeDL(SC_OPTS) as ydl:
+        info = ydl.extract_info(q, download=False)
         if info is None:
-            raise RuntimeError("No results")
+            raise RuntimeError("No results on SoundCloud")
         if "entries" in info:
             entries = [e for e in (info.get("entries") or []) if e]
             if not entries:
-                raise RuntimeError("No search results")
+                raise RuntimeError("No SoundCloud results for that search")
             info = entries[0]
         stream = _pick_stream(info)
         if not stream:
-            raise RuntimeError("No stream URL")
+            raise RuntimeError("No stream URL from SoundCloud")
         return {
             "title": info.get("title") or query,
             "url": stream,
             "webpage": info.get("webpage_url") or query,
             "duration": info.get("duration"),
         }
-
-
-def _extract(query: str) -> dict:
-    q = query.strip()
-    low = q.lower()
-    errors: list[str] = []
-
-    # Prefer SoundCloud if user pasted a SC link
-    if "soundcloud.com" in low:
-        try:
-            return _extract_once(q, {**_base_opts(["web"]), "default_search": "scsearch"})
-        except Exception as e:
-            errors.append(f"soundcloud:{e}")
-
-    # Direct YouTube URL or generic search — try several client stacks
-    for clients in _YT_CLIENTS:
-        try:
-            return _extract_once(q, _base_opts(clients))
-        except Exception as e:
-            errors.append(f"yt:{'+'.join(clients)}:{e}")
-            continue
-
-    # Last resort: SoundCloud search for plain text queries
-    if not any(x in low for x in ("youtube.com", "youtu.be", "soundcloud.com")):
-        try:
-            return _extract_once(
-                q,
-                {
-                    **_base_opts(["web"]),
-                    "default_search": "scsearch",
-                },
-            )
-        except Exception as e:
-            errors.append(f"scsearch:{e}")
-
-    raise RuntimeError(
-        "Could not resolve track (YouTube bot-check / region). "
-        "Try a SoundCloud URL, or set YTDLP_COOKIES to a cookies.txt path. "
-        f"Details: {errors[-1] if errors else 'unknown'}"
-    )
 
 
 class GuildPlayer:
@@ -173,10 +131,10 @@ class Music(commands.Cog):
             log.error("Next track failed: %s", e)
             await self._play_next(guild_id)
 
-    music = app_commands.Group(name="music", description="Music controls (SoundCloud + YouTube)")
+    music = app_commands.Group(name="music", description="Music controls (SoundCloud only)")
 
-    @music.command(name="play", description="Play from URL or search (SoundCloud preferred if YT blocks)")
-    @app_commands.describe(query="SoundCloud/YouTube URL or search terms")
+    @music.command(name="play", description="Play from SoundCloud URL or search")
+    @app_commands.describe(query="SoundCloud URL or search terms (no YouTube)")
     async def play(self, interaction: discord.Interaction, query: str):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Guild only.", ephemeral=True)
@@ -203,9 +161,8 @@ class Music(commands.Cog):
             except Exception as e:
                 log.exception("Resolve failed")
                 return await interaction.followup.send(
-                    f"❌ Could not find that track.\n{e}\n"
-                    f"Tip: paste a **SoundCloud** link, or ask the host to set **YTDLP_COOKIES** "
-                    f"to a Netscape cookies.txt exported while logged into YouTube."
+                    f"❌ Could not find that track on SoundCloud.\n{e}\n"
+                    f"Tip: paste a **soundcloud.com** link or search by song/artist name."
                 )
 
             title = track["title"]
