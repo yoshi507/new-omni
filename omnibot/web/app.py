@@ -308,7 +308,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             except Exception as e:
                 log.warning("Honeypot side-effect failed: %s", e)
 
-            # Auto-delete ticket panel when tickets disabled
             try:
                 before_t = dict(before.get("tickets") or {})
                 after_t = dict(after.get("tickets") or {})
@@ -333,6 +332,71 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                     storage.update_guild(guild_id, clear_panel)
             except Exception as e:
                 log.warning("Ticket panel side-effect failed: %s", e)
+
+            try:
+                import discord as _discord
+
+                before_v = dict(before.get("verification") or {})
+                after_v = dict(after.get("verification") or {})
+                v_on = bool(after_v.get("enabled"))
+                v_ch = after_v.get("channelId") or ""
+                v_role = after_v.get("roleId") or ""
+                changed = (
+                    before_v.get("enabled") != after_v.get("enabled")
+                    or before_v.get("channelId") != after_v.get("channelId")
+                    or before_v.get("roleId") != after_v.get("roleId")
+                )
+                if v_on and v_ch and v_role and changed:
+                    ch = g.get_channel(int(v_ch))
+                    if isinstance(ch, _discord.TextChannel):
+                        if before_v.get("messageId") and before_v.get("channelId"):
+                            try:
+                                och = g.get_channel(int(before_v["channelId"]))
+                                if isinstance(och, _discord.TextChannel):
+                                    await (await och.fetch_message(int(before_v["messageId"]))).delete()
+                            except Exception:
+                                pass
+                        view = _discord.ui.View(timeout=None)
+                        view.add_item(
+                            _discord.ui.Button(
+                                label="Verify",
+                                style=_discord.ButtonStyle.success,
+                                custom_id="omnibot:verify",
+                                emoji="✅",
+                            )
+                        )
+                        emb = _discord.Embed(
+                            title="✅ Verification",
+                            description=after_v.get("message")
+                            or "Click **Verify** to unlock the server.",
+                            color=0x3DD68C,
+                        )
+                        try:
+                            msg = await ch.send(embed=emb, view=view)
+
+                            def save_v(d):
+                                vv = d.setdefault("verification", {})
+                                vv["messageId"] = str(msg.id)
+                                vv["channelId"] = str(ch.id)
+                                vv["enabled"] = True
+
+                            storage.update_guild(guild_id, save_v)
+                        except Exception as e:
+                            log.warning("Verification panel post failed: %s", e)
+                elif not v_on and before_v.get("messageId") and before_v.get("channelId"):
+                    try:
+                        och = g.get_channel(int(before_v["channelId"]))
+                        if isinstance(och, _discord.TextChannel):
+                            await (await och.fetch_message(int(before_v["messageId"]))).delete()
+                    except Exception:
+                        pass
+
+                    def clear_v(d):
+                        (d.get("verification") or {}).pop("messageId", None)
+
+                    storage.update_guild(guild_id, clear_v)
+            except Exception as e:
+                log.warning("Verification panel side-effect failed: %s", e)
 
         return {"ok": True}
 
