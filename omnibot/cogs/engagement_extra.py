@@ -28,7 +28,6 @@ async def post_honeypot_warning(channel: discord.TextChannel) -> discord.Message
 
 
 async def delete_honeypot_warning(guild: discord.Guild, data: dict) -> None:
-    """Delete the stored honeypot warning message if present."""
     hp = data.get("honeypot") or {}
     ch_id = hp.get("channelId")
     msg_id = hp.get("warningMessageId")
@@ -78,6 +77,35 @@ class EngagementExtra(commands.Cog):
             f"Starboard → {channel.mention} · {emoji} × {threshold}", ephemeral=True
         )
 
+    @staticmethod
+    def _emoji_key(emoji) -> str:
+        if emoji is None:
+            return ""
+        if isinstance(emoji, str):
+            s = emoji.strip()
+            if s.startswith("<") and s.endswith(">") and ":" in s:
+                return s
+            return s
+        name = getattr(emoji, "name", None) or ""
+        eid = getattr(emoji, "id", None)
+        if eid:
+            animated = bool(getattr(emoji, "animated", False))
+            return f"<{'a' if animated else ''}:{name}:{eid}>"
+        return str(emoji)
+
+    def _emoji_matches(self, reaction_emoji, configured: str) -> bool:
+        cfg = (configured or "⭐").strip()
+        key = self._emoji_key(reaction_emoji)
+        if key == cfg:
+            return True
+        name = getattr(reaction_emoji, "name", None) or str(reaction_emoji)
+        cfg_name = cfg.strip("<>").split(":")[-2] if cfg.startswith("<") and cfg.count(":") >= 2 else cfg
+        if name == cfg or name == cfg_name:
+            return True
+        if str(reaction_emoji) == cfg or str(reaction_emoji) == cfg_name:
+            return True
+        return False
+
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if not payload.guild_id or payload.user_id == (self.bot.user.id if self.bot.user else 0):
@@ -86,11 +114,13 @@ class EngagementExtra(commands.Cog):
         sb = data.get("starboard") or {}
         if not sb.get("enabled") or not sb.get("channelId"):
             return
-        emoji = str(payload.emoji)
-        if emoji != sb.get("emoji", "⭐") and getattr(payload.emoji, "name", None) != sb.get("emoji", "⭐").strip(":"):
+        cfg_emoji = (sb.get("emoji") or "⭐").strip() or "⭐"
+        if not self._emoji_matches(payload.emoji, cfg_emoji):
             return
         guild = self.bot.get_guild(payload.guild_id)
         if not guild:
+            return
+        if str(payload.channel_id) == str(sb.get("channelId")):
             return
         ch = guild.get_channel(payload.channel_id)
         if not isinstance(ch, discord.TextChannel):
@@ -99,9 +129,11 @@ class EngagementExtra(commands.Cog):
             msg = await ch.fetch_message(payload.message_id)
         except Exception:
             return
+        if msg.author.bot:
+            return
         count = 0
         for r in msg.reactions:
-            if str(r.emoji) == emoji or getattr(r.emoji, "name", None) == sb.get("emoji"):
+            if self._emoji_matches(r.emoji, cfg_emoji):
                 count = r.count
                 break
         if count < int(sb.get("threshold") or 3):
@@ -109,21 +141,26 @@ class EngagementExtra(commands.Cog):
         posted = (data.get("starboardPosts") or {}).get(str(msg.id))
         if posted:
             return
-        dest = guild.get_channel(int(sb["channelId"]))
+        try:
+            dest = guild.get_channel(int(sb["channelId"]))
+        except (TypeError, ValueError):
+            return
         if not isinstance(dest, discord.TextChannel):
             return
         emb = discord.Embed(
-            description=msg.content[:2000] or "*attachment/embed*",
+            description=(msg.content[:2000] if msg.content else "") or "*attachment / embed*",
             color=0xF1C40F,
             timestamp=msg.created_at,
         )
         emb.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
-        emb.add_field(name="Source", value=f"[Jump]({msg.jump_url})")
-        emb.set_footer(text=f"{emoji} {count}")
+        emb.add_field(name="Source", value=f"[Jump to message]({msg.jump_url})")
+        emb.set_footer(text=f"{cfg_emoji} {count}")
         if msg.attachments:
-            emb.set_image(url=msg.attachments[0].url)
+            att = msg.attachments[0]
+            if att.content_type and att.content_type.startswith("image"):
+                emb.set_image(url=att.url)
         try:
-            sent = await dest.send(embed=emb)
+            sent = await dest.send(content=f"{cfg_emoji} **{count}** | {ch.mention}", embed=emb)
 
             def mut(d):
                 d.setdefault("starboardPosts", {})[str(msg.id)] = str(sent.id)
@@ -271,7 +308,7 @@ class EngagementExtra(commands.Cog):
         self._afk[interaction.guild.id][interaction.user.id] = reason[:200]
         await interaction.response.send_message(f"You're now AFK: {reason[:200]}")
 
-    @verify_g.command(name="setup", description="Setup verification button + role")
+    @verify_g.command(name="setup", description="Setup verification button + role and post the panel")
     @app_commands.checks.has_permissions(administrator=True)
     async def verify_setup(
         self,
@@ -280,13 +317,35 @@ class EngagementExtra(commands.Cog):
         role: discord.Role,
         message: str = "Click the button below to verify and gain access.",
     ):
+        await interaction.response.defer(ephemeral=True)
+        data = storage.load_guild(interaction.guild.id)
+        old = data.get("verification") or {}
+        if old.get("channelId") and old.get("messageId"):
+            try:
+                old_ch = interaction.guild.get_channel(int(old["channelId"]))  # type: ignore
+                if isinstance(old_ch, discord.TextChannel):
+                    old_msg = await old_ch.fetch_message(int(old["messageId"]))
+                    await old_msg.delete()
+            except Exception:
+                pass
+
         view = discord.ui.View(timeout=None)
-        btn = discord.ui.Button(
-            label="Verify", style=discord.ButtonStyle.success, custom_id="omnibot:verify"
+        view.add_item(
+            discord.ui.Button(
+                label="Verify", style=discord.ButtonStyle.success, custom_id="omnibot:verify", emoji="✅"
+            )
         )
-        view.add_item(btn)
-        emb = discord.Embed(title="Verification", description=message, color=0x3DD68C)
-        msg = await channel.send(embed=emb, view=view)
+        emb = discord.Embed(title="✅ Verification", description=message, color=0x3DD68C)
+        emb.set_footer(text="Click the button to unlock the server")
+        try:
+            msg = await channel.send(embed=emb, view=view)
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                f"❌ I can't post in {channel.mention}. Give me **Send Messages** + **Embed Links** there.",
+                ephemeral=True,
+            )
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Failed to post panel: {e}", ephemeral=True)
 
         def mut(d):
             d["verification"] = {
@@ -294,10 +353,15 @@ class EngagementExtra(commands.Cog):
                 "roleId": str(role.id),
                 "channelId": str(channel.id),
                 "messageId": str(msg.id),
+                "message": message,
             }
 
         storage.update_guild(interaction.guild.id, mut)
-        await interaction.response.send_message("Verification panel posted.", ephemeral=True)
+        await interaction.followup.send(
+            f"✅ Verification panel posted in {channel.mention} → role {role.mention}.\n"
+            f"Make sure my role is **above** {role.mention} so I can assign it.",
+            ephemeral=True,
+        )
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
@@ -460,27 +524,48 @@ class EngagementExtra(commands.Cog):
         if cnt.get("enabled") and str(cid) == str(cnt.get("channelId")):
             expect = int(cnt.get("next") or 1)
             last_user = cnt.get("lastUser")
+            text = (message.content or "").strip()
             try:
-                num = int(message.content.strip().split()[0])
-            except ValueError:
+                num = int(text.split()[0])
+            except (ValueError, IndexError):
+                return
+
+            fail_reason = None
+            if str(message.author.id) == str(last_user):
+                fail_reason = "same person counted twice in a row"
+            elif num != expect:
+                fail_reason = f"expected **{expect}**, got **{num}**"
+
+            if fail_reason:
+                def mut_reset(d):
+                    c = d.setdefault("counting", {})
+                    c["next"] = 1
+                    c["lastUser"] = None
+
+                storage.update_guild(gid, mut_reset)
                 try:
-                    await message.delete()
+                    await message.add_reaction("❌")
                 except Exception:
                     pass
-                return
-            if num != expect or str(message.author.id) == str(last_user):
                 try:
-                    await message.delete()
+                    await message.channel.send(
+                        f"💥 {message.author.mention} ruined the count ({fail_reason})! "
+                        f"Back to **1** — someone else start again."
+                    )
                 except Exception:
                     pass
                 return
 
-            def mut(d):
+            def mut_ok(d):
                 c = d.setdefault("counting", {})
                 c["next"] = expect + 1
                 c["lastUser"] = str(message.author.id)
 
-            storage.update_guild(gid, mut)
+            storage.update_guild(gid, mut_ok)
+            try:
+                await message.add_reaction("✅")
+            except Exception:
+                pass
             return
 
         wc = data.get("wordchain") or {}
