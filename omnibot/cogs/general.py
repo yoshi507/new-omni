@@ -71,6 +71,15 @@ class General(commands.Cog):
             inline=False,
         )
         embed.add_field(
+            name="🌐 Translate · 🎭 RP · 💞 Relationships",
+            value=(
+                "`/translate` `/tr` `/detectlang` · "
+                "`/rp do|list|say` · "
+                "`/relationship ship|marry|divorce|status|leaderboard`"
+            ),
+            inline=False,
+        )
+        embed.add_field(
             name="⚙️ Custom commands · Dashboard",
             value="`/auto custom-add|trigger-add` · `/dashboard` — toggles, channels, AI personality, tickets…",
             inline=False,
