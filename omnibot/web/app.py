@@ -91,7 +91,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         gid = str(guild_id).strip()
         if not gid.isdigit():
             raise HTTPException(400, f"Invalid guild id: {guild_id!r}")
-        # Prefer bot membership + user admin permission from OAuth guilds
         try:
             guilds = await _user_guilds(sess)
         except Exception as e:
@@ -99,7 +98,6 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
             guilds = []
         managed = {str(g.get("id")) for g in guilds if oauth.can_manage(g)}
         if gid not in managed:
-            # Fallback: if bot is in guild and user is in managed set after refresh
             raise HTTPException(403, "You need Administrator in that server to manage it.")
         if b and hasattr(b, "get_guild"):
             g = b.get_guild(int(gid))
@@ -264,17 +262,16 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                 cur[parts[-1]] = cleaned
 
         storage.update_guild(guild_id, mut)
-        # Side-effects: verification panel auto-post / delete
         try:
             data = storage.load_guild(guild_id)
             ver = data.get("verification") or {}
             if patch.get("verification.enabled") is False or (
                 "verification.enabled" in patch and not ver.get("enabled")
             ):
-                # try delete old panel
                 mid = ver.get("messageId")
                 cid = ver.get("channelId")
-                if mid and cid and b := app.state.bot:
+                b = app.state.bot
+                if mid and cid and b:
                     try:
                         ch = b.get_channel(int(cid))
                         if ch:
@@ -283,8 +280,8 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                     except Exception:
                         pass
             elif ver.get("enabled") and ver.get("channelId") and ver.get("roleId"):
-                # auto-post if no message yet
-                if not ver.get("messageId") and (b := app.state.bot):
+                b = app.state.bot
+                if not ver.get("messageId") and b:
                     try:
                         import discord as _discord
                         ch = b.get_channel(int(ver["channelId"]))
