@@ -17,79 +17,65 @@ class General(commands.Cog):
         embed = discord.Embed(
             title="🤖 OmniBot Help",
             description=(
-                "All-in-one Discord bot. **Slash**, **prefix** (`!`), and natural `omni …`.\n"
-                f"AI shares **{limit}/server/day**.\n"
-                "Resource pool: **4** tasks bot-wide, **1 per server**; extras queue.\n"
-                "Many tools are prefix/dashboard-only to stay under Discord's 100 slash limit."
+                "All-in-one Discord bot. **Slash**, **prefix**, and natural `omni …`.\n"
+                f"AI quota: **{limit}/server/day**. Dashboard for deep config."
             ),
             color=0x5B6CFF,
         )
         embed.add_field(
-            name="🧠 AI",
-            value="`/ask` `/chat` `/aisummary` `/aimoderate` `/aisecurity` `/imagine` `/clearmemory` · personality in dashboard",
+            name="🧠 AI · 🎵 Music · 🔊 Voice",
+            value="`/ask` `/chat` `/imagine` · `/music play|skip|stop|queue` · `/voice join|say|talk` · join-to-create",
             inline=False,
         )
         embed.add_field(
-            name="🛡️ Moderation & security",
-            value="`/ban` `/kick` `/timeout` `/warn` `/clear` `/lock` `/unlock` `/slowmode` · automod · anti-nuke · honeypot (`/engage honeypot-setup`)",
+            name="🛡️ Moderation · Security · Logging",
+            value=(
+                "`/kick` `/ban` `/timeout` `/warn` `/purge` `/lock` `/slowmode` · "
+                "`/antinuke config|status|unlockdown` · `/logging set` · honeypot"
+            ),
             inline=False,
         )
         embed.add_field(
-            name="📋 Logging · 🎫 Tickets · 👮 Staff",
-            value="`/logging set` · `/ticket open|claim|close` · `/staff note|notes|case`",
-            inline=False,
-        )
-        embed.add_field(
-            name="🎭 Roles · 🎉 Giveaways · 📢 Announce",
-            value="`/roles …` · sticky (`/engage sticky-toggle`) · `/giveaway start|reroll` · `/announce send`",
+            name="🎫 Tickets · 📋 Forms · 📊 Polls · 💡 Suggest",
+            value="`/ticket setup|panel|button` · `/form create|submit` · `/poll create` · `/suggest setup|submit`",
             inline=False,
         )
         embed.add_field(
             name="⭐ Engagement",
             value=(
-                "Starboard `/engage starboard-setup` · Invites `/invite leaderboard|stats` · "
-                "Verify `/verify setup` · Counting `/engage counting-setup` · "
-                "Word-chain `/engage wordchain-setup` · Booster `/engage booster-setup` · "
-                "`/afk` or `!afk`"
+                "Starboard · invites · verify · counting · word-chain · AFK · "
+                "welcome/goodbye · booster msgs · `/boostrole set` · `/autoname setup` · "
+                "`/birthday set` · `/bump setup` · `/social setup|add|notify`"
             ),
             inline=False,
         )
         embed.add_field(
-            name="🎵 Music · 🔊 Voice speech",
-            value="`/music play|skip|stop|queue|pause|resume` · `/voice join|leave|say|talk|voiceinfo` · join-to-create",
+            name="🎭 Roles · 🎨 Colour · 🎉 Giveaways",
+            value="`/roles autorole|reaction|give` · `/color set|clear` · `/giveaway start`",
             inline=False,
         )
         embed.add_field(
-            name="💰 Economy · ⭐ Levels · 👤 Profile",
-            value="`/daily` `/balance` `/shop` `/work` · `/level rank|leaderboard` · `/profile view|setbio|rep`",
+            name="📈 Stats · 📝 Docs · 💬 Quotes · 📢 Announce · 🧩 Embed",
+            value=(
+                "`/stats server|analytics` · `/docs set|get|list` · `/quote make|save|random` · "
+                "`/announce send` · `/embed send`"
+            ),
             inline=False,
         )
         embed.add_field(
-            name="🎮 Games · 🐾 Fun",
-            value="`/game trivia|guess|hangman|rps|tictactoe|count` · `/fun eightball|ship|joke|meme|cat|dog|…`",
+            name="💰 Economy · 🎰 Casino · 🎮 Games",
+            value=(
+                "`/balance` `/daily` `/work` `/slots` `/coinflip` · "
+                "`/casino blackjack|roulette` · `/game trivia|hangman|tictactoe`"
+            ),
             inline=False,
         )
         embed.add_field(
-            name="🧰 Utilities · 🔎 Search · 🌍 Translate",
-            value="`/util weather|calc|remind|poll|hash|password|color|…` · `/search wiki|urban|github|define` · `/translate`",
+            name="⚙️ Custom commands · Dashboard",
+            value="`/auto custom-add|trigger-add` · `/dashboard` — toggles, channels, AI personality, tickets…",
             inline=False,
         )
-        embed.add_field(
-            name="📊 Info · 🔬 Science · 💹 Finance",
-            value="`/info user|server|role|channel|avatar|bot|perms` · `/science apod|iss|peopleinspace` · `/finance crypto|fx`",
-            inline=False,
-        )
-        embed.add_field(
-            name="⚙️ Automation · 💾 Backup · 🎂 Community",
-            value="`/auto trigger-add|custom-add` · `/backup export|snapshot` · `/bday set|upcoming` · suggestions",
-            inline=False,
-        )
-        embed.add_field(
-            name="🌐 Dashboard",
-            value="`/dashboard` — AI personality (drives TTS character voice), toggles…",
-            inline=False,
-        )
-        embed.set_footer(text="OmniBot · Feature universe edition · prefix commands work for most actions")
+        embed.set_footer(text="OmniBot · commands + dashboard")
         return embed
 
     @app_commands.command(name="ping", description="Check bot latency")
