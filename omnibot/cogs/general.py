@@ -17,14 +17,15 @@ class General(commands.Cog):
         embed = discord.Embed(
             title="🤖 OmniBot Help",
             description=(
-                "All-in-one Discord bot. **Slash**, **prefix**, and natural `omni …`.\n"
+                "All-in-one Discord bot — **slash commands only**.\n"
+                "Talk to AI by **@mentioning** the bot.\n"
                 f"AI quota: **{limit}/server/day**. Dashboard for deep config."
             ),
             color=0x5B6CFF,
         )
         embed.add_field(
             name="🧠 AI · 🎵 Music · 🔊 Voice",
-            value="`/ask` `/chat` `/imagine` · `/music play|skip|stop|queue` · `/voice join|say|talk` · join-to-create",
+            value="`/ask` `/chat` `/imagine` · `/music play|skip|stop|queue` · `/voice join|say|talk` · join-to-create\n*Or @mention the bot to chat*",
             inline=False,
         )
         embed.add_field(
@@ -80,11 +81,11 @@ class General(commands.Cog):
             inline=False,
         )
         embed.add_field(
-            name="⚙️ Custom commands · Dashboard",
-            value="`/auto custom-add|trigger-add` · `/dashboard` — toggles, channels, AI personality, tickets…",
+            name="⚙️ Custom · Dashboard",
+            value="`/auto custom-add|custom-run|trigger-add` · `/dashboard` — toggles, channels, AI personality…",
             inline=False,
         )
-        embed.set_footer(text="OmniBot · commands + dashboard")
+        embed.set_footer(text="OmniBot · slash commands · @mention for AI")
         return embed
 
     @app_commands.command(name="ping", description="Check bot latency")
@@ -93,17 +94,9 @@ class General(commands.Cog):
             f"Pong! `{round(self.bot.latency * 1000)}ms`", ephemeral=True
         )
 
-    @commands.command(name="ping")
-    async def ping_prefix(self, ctx: commands.Context):
-        await ctx.reply(f"Pong! `{round(self.bot.latency * 1000)}ms`", mention_author=False)
-
     @app_commands.command(name="help", description="Show OmniBot commands")
     async def help_slash(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=self._help_embed())
-
-    @commands.command(name="help")
-    async def help_prefix(self, ctx: commands.Context):
-        await ctx.reply(embed=self._help_embed(), mention_author=False)
 
     @app_commands.command(name="dashboard", description="Open the OmniBot dashboard")
     async def dashboard(self, interaction: discord.Interaction):
@@ -114,11 +107,6 @@ class General(commands.Cog):
             color=0x5B6CFF,
         )
         await interaction.response.send_message(embeds=[embed])
-
-    @commands.command(name="dashboard")
-    async def dashboard_prefix(self, ctx: commands.Context):
-        url = settings.public_base_url.rstrip("/") or "https://omnibot.wisp.uno"
-        await ctx.reply(f"Dashboard: {url}", mention_author=False)
 
     @app_commands.command(name="terms", description="OmniBot Terms of Service link")
     async def terms(self, interaction: discord.Interaction):

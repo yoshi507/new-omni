@@ -24,11 +24,8 @@ INTENTS.emojis = True
 
 
 def _prefix(bot: commands.Bot, message: discord.Message):
-    if not message.guild:
-        return settings.default_prefix
-    data = storage.load_guild(message.guild.id)
-    p = (data.get("commandSettings") or {}).get("prefix") or settings.default_prefix
-    return commands.when_mentioned_or(p)(bot, message)
+    """No text prefixes (!, ?, omni, …). Mention-only fallback for legacy ctx tools."""
+    return commands.when_mentioned(bot, message)
 
 
 class OmniBot(commands.Bot):
@@ -39,7 +36,7 @@ class OmniBot(commands.Bot):
             help_command=None,
             case_insensitive=True,
         )
-        self.deploy_marker = "2026-09-22-feature-universe-complete"
+        self.deploy_marker = "2026-10-08-slash-only-no-prefix"
 
     async def setup_hook(self) -> None:
         cogs_dir = Path(__file__).parent / "cogs"
@@ -69,7 +66,7 @@ class OmniBot(commands.Bot):
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name="/help · omnibot dashboard",
+                name="/help · @mention for AI",
             )
         )
 

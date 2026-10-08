@@ -1,4 +1,4 @@
-"""Keyword triggers, scheduled messages, custom commands."""
+"""Keyword triggers, scheduled messages, custom commands (slash only)."""
 from __future__ import annotations
 
 import time
@@ -45,7 +45,7 @@ class Automation(commands.Cog):
         lines = [f"`{k}` → {v[:80]}" for k, v in list(triggers.items())[:30]]
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-    @auto.command(name="custom-add", description="Add a custom prefix command")
+    @auto.command(name="custom-add", description="Add a custom slash-run command response")
     @app_commands.checks.has_permissions(administrator=True)
     async def custom_add(self, interaction: discord.Interaction, name: str, response: str):
         name = name.lower().strip().replace(" ", "")
@@ -54,7 +54,10 @@ class Automation(commands.Cog):
             d.setdefault("customCommands", {})[name] = response[:1500]
 
         storage.update_guild(interaction.guild.id, mut)
-        await interaction.response.send_message(f"Custom command `!{name}` added.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Custom command `{name}` added. Run it with `/auto custom-run name:{name}`.",
+            ephemeral=True,
+        )
 
     @auto.command(name="custom-remove", description="Remove custom command")
     @app_commands.checks.has_permissions(administrator=True)
@@ -65,12 +68,34 @@ class Automation(commands.Cog):
         storage.update_guild(interaction.guild.id, mut)
         await interaction.response.send_message("Removed.", ephemeral=True)
 
+    @auto.command(name="custom-run", description="Run a custom command by name")
+    async def custom_run(self, interaction: discord.Interaction, name: str):
+        data = storage.load_guild(interaction.guild.id)
+        custom = (data.get("customCommands") or {}).get(name.lower().strip())
+        if not custom:
+            return await interaction.response.send_message(
+                f"No custom command named `{name}`.", ephemeral=True
+            )
+        await interaction.response.send_message(custom)
+
+    @auto.command(name="custom-list", description="List custom commands")
+    async def custom_list(self, interaction: discord.Interaction):
+        data = storage.load_guild(interaction.guild.id)
+        cmds = data.get("customCommands") or {}
+        if not cmds:
+            return await interaction.response.send_message("No custom commands.", ephemeral=True)
+        lines = [f"`{k}`" for k in list(cmds.keys())[:40]]
+        await interaction.response.send_message(
+            "Custom commands (use `/auto custom-run`):\n" + ", ".join(lines),
+            ephemeral=True,
+        )
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.guild or not message.content:
             return
         data = storage.load_guild(message.guild.id)
-        # keyword triggers
+        # keyword triggers only (no prefix commands)
         triggers = data.get("triggers") or {}
         content_l = message.content.lower()
         for key, resp in triggers.items():
@@ -80,16 +105,6 @@ class Automation(commands.Cog):
                 except Exception:
                     pass
                 break
-        # custom prefix commands
-        prefix = (data.get("commandSettings") or {}).get("prefix") or "!"
-        if message.content.startswith(prefix):
-            name = message.content[len(prefix):].split()[0].lower()
-            custom = (data.get("customCommands") or {}).get(name)
-            if custom:
-                try:
-                    await message.channel.send(custom)
-                except Exception:
-                    pass
 
 
 async def setup(bot: commands.Bot):

@@ -110,14 +110,6 @@ class AI(commands.Cog):
             "Your AI conversation memory in this server has been cleared.", ephemeral=True
         )
 
-    @commands.command(name="ask")
-    async def ask_prefix(self, ctx: commands.Context, *, question: str):
-        if not ctx.guild:
-            return
-        async with ctx.typing():
-            ok, text = await groq_client.chat(ctx.guild.id, question, user_id=ctx.author.id)
-        await ctx.reply(f"❌ {text}" if not ok else text[:1900], mention_author=False)
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(AI(bot))
