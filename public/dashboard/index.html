@@ -54,21 +54,8 @@
 <script>
 const S={user:null,guilds:[],guildId:null,guildName:'',settings:{},channels:[],roles:[],view:'servers'};
 const SECTIONS={
-  ai:[{id:'ai.enabled',label:'AI enabled',type:'bool'},{id:'ai.naturalInvocation',label:'Natural invocation (say Omni)',type:'bool'},{id:'ai.memoryEnabled',label:'Per-user memory',type:'bool'},{id:'ai.commandPrefix',label:'Command prefix',type:'text'},{id:'ai.personality',label:'Personality / system prompt',type:'textarea'}],
-  moderation:[
-    {id:'moderation.automodEnabled',label:'Word filter automod',type:'bool'},
-    {id:'moderation.blockedWords',label:'Blocked words (comma-separated)',type:'textarea'},
-    {id:'moderation.antiSpamEnabled',label:'Anti-spam',type:'bool'},
-    {id:'moderation.smartAutomodEnabled',label:'⚡ SMART AUTOMOD — turn ON here',type:'bool',hint:'Local rules (invites, scams, mass mentions, caps). No Groq API key needed. Toggle ON then click Save.'},
-    {id:'moderation.smartAutomodAction',label:'⚡ Smart automod action',type:'select',options:['delete','timeout']},
-    {id:'moderation.timeoutMinutes',label:'Timeout minutes (if action=timeout)',type:'number'},
-    {id:'moderation.blockInvites',label:'⚡ Block Discord invites',type:'bool'},
-    {id:'moderation.blockLinks',label:'⚡ Block all links',type:'bool'},
-    {id:'moderation.maxMentions',label:'⚡ Max mentions per message',type:'number'},
-    {id:'security.enabled',label:'Anti-nuke monitoring',type:'bool'},
-    {id:'honeypot.enabled',label:'Honeypot protection',type:'bool'},
-    {id:'honeypot.channelId',label:'Honeypot channel',type:'channel'}
-  ],
+  ai:[{id:'ai.enabled',label:'AI enabled',type:'bool'},{id:'ai.naturalInvocation',label:'AI on @mention',type:'bool',hint:'When on, @mention the bot to chat'},{id:'ai.memoryEnabled',label:'Per-user memory',type:'bool'},{id:'ai.personality',label:'Personality / system prompt',type:'textarea'}],
+  moderation:[{id:'moderation.automodEnabled',label:'Word filter automod',type:'bool'},{id:'moderation.blockedWords',label:'Blocked words (comma-separated)',type:'textarea'},{id:'moderation.antiSpamEnabled',label:'Anti-spam',type:'bool'},{id:'moderation.smartAutomodEnabled',label:'⚡ SMART AUTOMOD',type:'bool',hint:'Local rules — no Groq key. Toggle ON then Save.'},{id:'moderation.smartAutomodAction',label:'Smart automod action',type:'select',options:['delete','timeout']},{id:'moderation.timeoutMinutes',label:'Timeout minutes',type:'number'},{id:'moderation.blockInvites',label:'Block Discord invites',type:'bool'},{id:'moderation.blockLinks',label:'Block all links',type:'bool'},{id:'moderation.maxMentions',label:'Max mentions per message',type:'number'},{id:'security.enabled',label:'Anti-nuke monitoring',type:'bool'},{id:'honeypot.enabled',label:'Honeypot protection',type:'bool'},{id:'honeypot.channelId',label:'Honeypot channel',type:'channel'}],
   engagement:[{id:'welcome.enabled',label:'Welcome messages',type:'bool'},{id:'welcome.channelId',label:'Welcome channel',type:'channel'},{id:'welcome.message',label:'Welcome text',type:'textarea'},{id:'goodbye.enabled',label:'Goodbye messages',type:'bool'},{id:'goodbye.channelId',label:'Goodbye channel',type:'channel'},{id:'goodbye.message',label:'Goodbye text',type:'textarea'},{id:'deadchat.enabled',label:'Dead Chat Reviver',type:'bool'},{id:'deadchat.minutes',label:'Minutes of silence',type:'number'},{id:'deadchat.channelId',label:'Dead chat channel',type:'channel'},{id:'leveling.enabled',label:'Leveling / XP',type:'bool'},{id:'leveling.announce',label:'Announce level-ups',type:'bool'},{id:'autorole.enabled',label:'Autorole',type:'bool'},{id:'autorole.roleId',label:'Autorole role',type:'role'},{id:'starboard.enabled',label:'Starboard',type:'bool'},{id:'starboard.channelId',label:'Starboard channel',type:'channel'},{id:'counting.enabled',label:'Counting',type:'bool'},{id:'counting.channelId',label:'Counting channel',type:'channel'},{id:'verification.enabled',label:'Verification',type:'bool'},{id:'verification.channelId',label:'Verify panel channel',type:'channel'},{id:'verification.roleId',label:'Verified role',type:'role'},{id:'booster.enabled',label:'Booster messages',type:'bool'},{id:'booster.channelId',label:'Booster channel',type:'channel'},{id:'bump.enabled',label:'Bump reminder',type:'bool'},{id:'bump.channelId',label:'Bump channel',type:'channel'},{id:'bump.message',label:'Bump message',type:'text'},{id:'social.enabled',label:'Social notifications',type:'bool'},{id:'social.channelId',label:'Social channel',type:'channel'}],
   music:[{id:'music.enabled',label:'Music (SoundCloud)',type:'bool'}],
   logging:[{id:'logging.enabled',label:'Logging',type:'bool'},{id:'logging.channelId',label:'Log channel',type:'channel'}],
@@ -76,7 +63,7 @@ const SECTIONS={
 };
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200)}
 async function api(path,opts={}){const r=await fetch('/api'+path,{credentials:'include',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||e.message||r.statusText)}return r.json()}
-function showLanding(on){document.getElementById('landing').style.display=on?'flex':'none';document.getElementById('app').style.display=on?'none':'grid';if(!on)document.getElementById('app').classList.add('on')}
+function showLanding(on){document.getElementById('landing').style.display=on?'flex':'none';document.getElementById('app').style.display=on?'none':'grid'}
 async function refreshAuth(){try{const m=await api('/auth/me');S.user=m.user;document.getElementById('side-user').textContent=m.user?.global_name||m.user?.username||'';return true}catch{return false}}
 async function loadGuilds(){const r=await api('/guilds');S.guilds=r.guilds||[]}
 function setView(v){S.view=v;document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.getElementById('top-title').textContent=v.charAt(0).toUpperCase()+v.slice(1);render()}
@@ -84,13 +71,7 @@ function channelOptions(sel){return '<option value="">— none —</option>'+(S.
 function roleOptions(sel){return '<option value="">— none —</option>'+(S.roles||[]).map(r=>`<option value="${r.id}" ${String(sel)===String(r.id)?'selected':''}>@${r.name}</option>`).join('')}
 async function openGuild(id,name){S.guildId=id;S.guildName=name||id;try{const b=await api(`/guilds/${id}/bundle`);S.settings=b.settings||{};S.channels=b.channels||[];S.roles=b.roles||[];document.querySelectorAll('.needs-guild').forEach(el=>el.classList.remove('hidden'));setView('overview')}catch(e){toast(e.message)}}
 function renderServers(){if(!S.guilds.length)return `<div class="card"><p class="desc">No servers where you have Administrator.</p></div>`;return S.guilds.map(g=>`<div class="card server-card" data-id="${g.id}" data-name="${g.name||''}"><strong>${g.name||g.id}</strong><p class="desc">${g.botIn?'Bot is in this server':'Invite the bot'}</p></div>`).join('')}
-function renderOverview(){return `<div class="card"><h3>${S.guildName}</h3>
-<p class="desc">Where to find the new features:</p>
-<ul class="desc" style="line-height:1.9;margin:12px 0 0 18px">
-<li><span class="hl">Moderation</span> → <b>⚡ SMART AUTOMOD</b> toggle (no API key) + action / block invites / links</li>
-<li><span class="hl">Roles (Reaction)</span> → build &amp; post a reaction-roles panel (emoji + role pairs)</li>
-<li><span class="hl">Engagement</span> → Social feeds (platform + handle, add/remove)</li>
-</ul></div>`}
+function renderOverview(){return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Roles (Reaction) supports <b>multiple</b> panels. Post as many as you need.</p></div>`}
 function renderSettings(fields){
   if(!fields)return renderOverview();
   const rows=fields.map(f=>{const val=S.settings[f.id];
@@ -105,11 +86,9 @@ function renderSettings(fields){
   let social='';
   if(S.view==='engagement'){
     social=`<div class="card"><h3>Social notification feeds</h3>
-      <p class="desc">Platform + handle. Enable social + pick channel above, Save, then add feeds. Staff use /social notify.</p>
+      <p class="desc">Platform + handle. Enable social + channel above, Save, then add feeds.</p>
       <div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
-        <label class="field" style="flex:1;min-width:120px;margin:0">Platform
-          <select id="sf-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="twitter">Twitter / X</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option><option value="reddit">Reddit</option></select>
-        </label>
+        <label class="field" style="flex:1;min-width:120px;margin:0">Platform<select id="sf-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="twitter">Twitter / X</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option><option value="reddit">Reddit</option></select></label>
         <label class="field" style="flex:2;min-width:140px;margin:0">Handle<input id="sf-handle" placeholder="e.g. MrBeast"/></label>
         <button class="btn btn-primary" id="btn-sf-add">Add feed</button>
       </div>
@@ -121,15 +100,18 @@ function renderRolesPanel(){
   const chOpts=channelOptions(''),roleOpts=roleOptions('');
   let rows='';
   for(let i=1;i<=5;i++)rows+=`<div class="row" style="flex-wrap:wrap;gap:8px"><label class="field" style="flex:1;min-width:100px">Emoji ${i}<input data-rr-emoji="${i}" placeholder="🎮"></label><label class="field" style="flex:2;min-width:140px">Role ${i}<select data-rr-role="${i}">${roleOpts}</select></label></div>`;
-  return `<div class="card"><h3>⚡ Reaction roles setup</h3>
-    <p class="desc"><b>Set up reaction roles from the dashboard here.</b> Pick channel → add emoji + role pairs → Post panel. Bot needs Manage Roles + Add Reactions; bot role must be above the roles it assigns.</p>
+  return `<div class="card"><h3>⚡ Post a reaction roles panel</h3>
+    <p class="desc"><b>Post as many panels as you want</b> — each is a separate message. Existing panels stay active.</p>
     <label class="field">Channel<select id="rr-channel">${chOpts}</select></label>
     <label class="field">Title<input id="rr-title" value="Choose your roles"></label>
     <label class="field">Description<textarea id="rr-desc">React below to get a role</textarea></label>
     ${rows}
-    <button class="btn btn-primary" id="btn-rr-post" style="margin-top:14px">Post reaction panel</button>
-    <button class="btn btn-secondary" id="btn-rr-list" style="margin-top:14px;margin-left:8px">List bindings</button>
-    <div id="rr-list" class="desc" style="margin-top:12px"></div></div>`;
+    <button class="btn btn-primary" id="btn-rr-post" style="margin-top:14px">Post new panel</button>
+  </div>
+  <div class="card"><h3>Active panels</h3>
+    <p class="desc">All panels in this server. Remove unbinds roles (delete the Discord message yourself if needed).</p>
+    <div id="rr-panels">Loading…</div>
+  </div>`;
 }
 async function render(){const c=document.getElementById('content');if(S.view==='servers')c.innerHTML=renderServers();else if(S.view==='overview')c.innerHTML=renderOverview();else if(S.view==='roles')c.innerHTML=renderRolesPanel();else c.innerHTML=renderSettings(SECTIONS[S.view]);bind()}
 function bind(){
@@ -139,10 +121,23 @@ function bind(){
   if(save)save.onclick=async()=>{const patch={};document.querySelectorAll('[data-id]').forEach(el=>{const id=el.dataset.id;if(el.classList.contains('switch'))patch[id]=el.classList.contains('on');else if(el.tagName==='SELECT')patch[id]=el.value;else if(el.type==='number')patch[id]=Number(el.value);else patch[id]=el.value});try{await api(`/guilds/${S.guildId}/settings`,{method:'PUT',body:JSON.stringify({patch})});Object.assign(S.settings,patch);toast('Saved')}catch(e){toast(e.message)}};
   const panelBtn=document.getElementById('btn-ticket-panel');
   if(panelBtn)panelBtn.onclick=async()=>{const ch=(document.querySelector('[data-id="tickets.panelChannelId"]')||{}).value||S.settings['tickets.panelChannelId'];if(!ch){toast('Pick a panel channel first');return}try{await api(`/guilds/${S.guildId}/tickets/panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch)})});toast('Ticket panel posted')}catch(e){toast(e.message)}};
+  async function loadRrPanels(){
+    const el=document.getElementById('rr-panels');
+    if(!el||!S.guildId)return;
+    try{
+      const r=await api(`/guilds/${S.guildId}/roles/reaction-list`);
+      const panels=r.panels||[];
+      if(!panels.length){el.innerHTML='<span class="desc">No panels yet — post one above.</span>';return;}
+      el.innerHTML=panels.map(p=>{
+        const binds=(p.bindings||[]).map(b=>`${b.emoji} → role ${b.roleId}`).join(' · ')||'no bindings';
+        return `<div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-start"><div style="flex:1;min-width:180px"><strong>${p.title||'Panel'}</strong><div class="desc">msg <code>${p.messageId}</code> · channel <code>${p.channelId||'?'}</code><br>${binds}</div></div><button class="btn btn-secondary btn-rr-remove" data-mid="${p.messageId}" style="padding:6px 12px;font-size:.85rem">Remove panel</button></div>`;
+      }).join('');
+      el.querySelectorAll('.btn-rr-remove').forEach(btn=>{btn.onclick=async()=>{if(!confirm('Remove this panel\'s role bindings?'))return;try{await api(`/guilds/${S.guildId}/roles/reaction-panel/${btn.dataset.mid}`,{method:'DELETE'});toast('Panel removed');loadRrPanels()}catch(e){toast(e.message)}}});
+    }catch(e){el.textContent='Could not load panels: '+e.message}
+  }
   const rrPost=document.getElementById('btn-rr-post');
-  if(rrPost)rrPost.onclick=async()=>{const ch=document.getElementById('rr-channel')?.value;if(!ch){toast('Pick a channel');return}const pairs=[];for(let i=1;i<=5;i++){const em=document.querySelector(`[data-rr-emoji="${i}"]`)?.value?.trim();const rid=document.querySelector(`[data-rr-role="${i}"]`)?.value;if(em&&rid)pairs.push({emoji:em,role_id:String(rid)})}if(!pairs.length){toast('Add at least one emoji + role');return}try{await api(`/guilds/${S.guildId}/roles/reaction-panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch),title:document.getElementById('rr-title')?.value||'Roles',description:document.getElementById('rr-desc')?.value||'',pairs})});toast('Reaction panel posted')}catch(e){toast(e.message)}};
-  const rrList=document.getElementById('btn-rr-list');
-  if(rrList)rrList.onclick=async()=>{try{const r=await api(`/guilds/${S.guildId}/roles/reaction-list`);const items=r.items||[];const el=document.getElementById('rr-list');if(!items.length){el.textContent='No bindings yet.';return}el.innerHTML=items.map(i=>`• ${i.emoji} → role ${i.roleId} · msg ${i.messageId}`).join('<br>')}catch(e){toast(e.message)}};
+  if(rrPost)rrPost.onclick=async()=>{const ch=document.getElementById('rr-channel')?.value;if(!ch){toast('Pick a channel');return}const pairs=[];for(let i=1;i<=5;i++){const em=document.querySelector(`[data-rr-emoji="${i}"]`)?.value?.trim();const rid=document.querySelector(`[data-rr-role="${i}"]`)?.value;if(em&&rid)pairs.push({emoji:em,role_id:String(rid)})}if(!pairs.length){toast('Add at least one emoji + role');return}try{await api(`/guilds/${S.guildId}/roles/reaction-panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch),title:document.getElementById('rr-title')?.value||'Roles',description:document.getElementById('rr-desc')?.value||'',pairs})});toast('New panel posted — existing panels stay active');loadRrPanels()}catch(e){toast(e.message)}};
+  if(S.view==='roles')loadRrPanels();
   async function loadSocialFeeds(){const el=document.getElementById('sf-list');if(!el||!S.guildId)return;try{const r=await api(`/guilds/${S.guildId}/social/feeds`);const feeds=r.feeds||[];if(!feeds.length){el.innerHTML='<span class="desc">No feeds yet.</span>';return}el.innerHTML=feeds.map((f,i)=>`<div class="row" style="padding:8px 0"><div><strong>${(f.platform||'').toUpperCase()}</strong> · <code>${f.handle||''}</code></div><button class="btn btn-secondary btn-sf-remove" data-idx="${i}" style="padding:6px 12px;font-size:.85rem">Remove</button></div>`).join('');el.querySelectorAll('.btn-sf-remove').forEach(btn=>{btn.onclick=async()=>{try{await api(`/guilds/${S.guildId}/social/feeds/${btn.dataset.idx}`,{method:'DELETE'});toast('Feed removed');loadSocialFeeds()}catch(e){toast(e.message)}}})}catch(e){el.textContent='Could not load: '+e.message}}
   const sfAdd=document.getElementById('btn-sf-add');
   if(sfAdd)sfAdd.onclick=async()=>{const platform=document.getElementById('sf-platform')?.value||'youtube';const handle=(document.getElementById('sf-handle')?.value||'').trim();if(!handle){toast('Enter a handle');return}try{await api(`/guilds/${S.guildId}/social/feeds`,{method:'POST',body:JSON.stringify({platform,handle})});document.getElementById('sf-handle').value='';toast('Feed added');loadSocialFeeds()}catch(e){toast(e.message)}};
