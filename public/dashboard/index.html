@@ -21,12 +21,12 @@
 .server-card{cursor:pointer}.server-card:hover{border-color:var(--accent)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--border);padding:12px 16px;border-radius:12px;display:none;z-index:50}.toast.show{display:block}
 .hidden{display:none!important}.status{display:inline-flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}.status i{width:8px;height:8px;border-radius:50%;background:#666;display:inline-block}.status.ok i{background:var(--ok)}
+.hl{color:var(--accent);font-weight:700}
 </style></head><body>
 <div id="landing" class="landing">
   <h1>Omni<span style="color:var(--accent)">Bot</span></h1>
   <p>AI, moderation, music, economy and more — configured live.</p>
   <p style="margin:24px 0"><a class="btn btn-primary" href="/auth/login">Add to Discord / Log in</a></p>
-  <p class="desc">Admin-only settings. Manage every feature from one place.</p>
 </div>
 <div id="app" class="app">
   <aside class="sidebar" id="sidebar">
@@ -37,7 +37,7 @@
       <button data-view="ai" class="needs-guild hidden">AI & Personality</button>
       <button data-view="moderation" class="needs-guild hidden">Moderation</button>
       <button data-view="engagement" class="needs-guild hidden">Engagement</button>
-      <button data-view="roles" class="needs-guild hidden">Roles</button>
+      <button data-view="roles" class="needs-guild hidden">Roles (Reaction)</button>
       <button data-view="music" class="needs-guild hidden">Music</button>
       <button data-view="logging" class="needs-guild hidden">Logging</button>
       <button data-view="tickets" class="needs-guild hidden">Tickets</button>
@@ -46,10 +46,7 @@
     <button class="btn btn-secondary" id="btn-logout" style="margin-top:10px">Log out</button>
   </aside>
   <div class="main">
-    <div class="topbar">
-      <span id="top-title">Servers</span>
-      <span class="status" id="bot-status"><i></i> Checking…</span>
-    </div>
+    <div class="topbar"><span id="top-title">Servers</span><span class="status" id="bot-status"><i></i> Checking…</span></div>
     <div class="content" id="content"></div>
   </div>
 </div>
@@ -58,7 +55,20 @@
 const S={user:null,guilds:[],guildId:null,guildName:'',settings:{},channels:[],roles:[],view:'servers'};
 const SECTIONS={
   ai:[{id:'ai.enabled',label:'AI enabled',type:'bool'},{id:'ai.naturalInvocation',label:'Natural invocation (say Omni)',type:'bool'},{id:'ai.memoryEnabled',label:'Per-user memory',type:'bool'},{id:'ai.commandPrefix',label:'Command prefix',type:'text'},{id:'ai.personality',label:'Personality / system prompt',type:'textarea'}],
-  moderation:[{id:'moderation.automodEnabled',label:'Word filter automod',type:'bool'},{id:'moderation.blockedWords',label:'Blocked words (comma-separated)',type:'textarea'},{id:'moderation.antiSpamEnabled',label:'Anti-spam',type:'bool'},{id:'moderation.smartAutomodEnabled',label:'Smart automod (no AI key)',type:'bool',hint:'Local rules: invites, scams, mass mentions, caps — does NOT use Groq'},{id:'moderation.smartAutomodAction',label:'Smart automod action',type:'select',options:['delete','timeout']},{id:'moderation.timeoutMinutes',label:'Timeout minutes',type:'number'},{id:'moderation.blockInvites',label:'Block Discord invites',type:'bool'},{id:'moderation.blockLinks',label:'Block all links',type:'bool'},{id:'moderation.maxMentions',label:'Max mentions per message',type:'number'},{id:'security.enabled',label:'Anti-nuke monitoring',type:'bool'},{id:'honeypot.enabled',label:'Honeypot protection',type:'bool'},{id:'honeypot.channelId',label:'Honeypot channel',type:'channel'}],
+  moderation:[
+    {id:'moderation.automodEnabled',label:'Word filter automod',type:'bool'},
+    {id:'moderation.blockedWords',label:'Blocked words (comma-separated)',type:'textarea'},
+    {id:'moderation.antiSpamEnabled',label:'Anti-spam',type:'bool'},
+    {id:'moderation.smartAutomodEnabled',label:'⚡ SMART AUTOMOD — turn ON here',type:'bool',hint:'Local rules (invites, scams, mass mentions, caps). No Groq API key needed. Toggle ON then click Save.'},
+    {id:'moderation.smartAutomodAction',label:'⚡ Smart automod action',type:'select',options:['delete','timeout']},
+    {id:'moderation.timeoutMinutes',label:'Timeout minutes (if action=timeout)',type:'number'},
+    {id:'moderation.blockInvites',label:'⚡ Block Discord invites',type:'bool'},
+    {id:'moderation.blockLinks',label:'⚡ Block all links',type:'bool'},
+    {id:'moderation.maxMentions',label:'⚡ Max mentions per message',type:'number'},
+    {id:'security.enabled',label:'Anti-nuke monitoring',type:'bool'},
+    {id:'honeypot.enabled',label:'Honeypot protection',type:'bool'},
+    {id:'honeypot.channelId',label:'Honeypot channel',type:'channel'}
+  ],
   engagement:[{id:'welcome.enabled',label:'Welcome messages',type:'bool'},{id:'welcome.channelId',label:'Welcome channel',type:'channel'},{id:'welcome.message',label:'Welcome text',type:'textarea'},{id:'goodbye.enabled',label:'Goodbye messages',type:'bool'},{id:'goodbye.channelId',label:'Goodbye channel',type:'channel'},{id:'goodbye.message',label:'Goodbye text',type:'textarea'},{id:'deadchat.enabled',label:'Dead Chat Reviver',type:'bool'},{id:'deadchat.minutes',label:'Minutes of silence',type:'number'},{id:'deadchat.channelId',label:'Dead chat channel',type:'channel'},{id:'leveling.enabled',label:'Leveling / XP',type:'bool'},{id:'leveling.announce',label:'Announce level-ups',type:'bool'},{id:'autorole.enabled',label:'Autorole',type:'bool'},{id:'autorole.roleId',label:'Autorole role',type:'role'},{id:'starboard.enabled',label:'Starboard',type:'bool'},{id:'starboard.channelId',label:'Starboard channel',type:'channel'},{id:'counting.enabled',label:'Counting',type:'bool'},{id:'counting.channelId',label:'Counting channel',type:'channel'},{id:'verification.enabled',label:'Verification',type:'bool'},{id:'verification.channelId',label:'Verify panel channel',type:'channel'},{id:'verification.roleId',label:'Verified role',type:'role'},{id:'booster.enabled',label:'Booster messages',type:'bool'},{id:'booster.channelId',label:'Booster channel',type:'channel'},{id:'bump.enabled',label:'Bump reminder',type:'bool'},{id:'bump.channelId',label:'Bump channel',type:'channel'},{id:'bump.message',label:'Bump message',type:'text'},{id:'social.enabled',label:'Social notifications',type:'bool'},{id:'social.channelId',label:'Social channel',type:'channel'}],
   music:[{id:'music.enabled',label:'Music (SoundCloud)',type:'bool'}],
   logging:[{id:'logging.enabled',label:'Logging',type:'bool'},{id:'logging.channelId',label:'Log channel',type:'channel'}],
@@ -74,7 +84,13 @@ function channelOptions(sel){return '<option value="">— none —</option>'+(S.
 function roleOptions(sel){return '<option value="">— none —</option>'+(S.roles||[]).map(r=>`<option value="${r.id}" ${String(sel)===String(r.id)?'selected':''}>@${r.name}</option>`).join('')}
 async function openGuild(id,name){S.guildId=id;S.guildName=name||id;try{const b=await api(`/guilds/${id}/bundle`);S.settings=b.settings||{};S.channels=b.channels||[];S.roles=b.roles||[];document.querySelectorAll('.needs-guild').forEach(el=>el.classList.remove('hidden'));setView('overview')}catch(e){toast(e.message)}}
 function renderServers(){if(!S.guilds.length)return `<div class="card"><p class="desc">No servers where you have Administrator.</p></div>`;return S.guilds.map(g=>`<div class="card server-card" data-id="${g.id}" data-name="${g.name||''}"><strong>${g.name||g.id}</strong><p class="desc">${g.botIn?'Bot is in this server':'Invite the bot'}</p></div>`).join('')}
-function renderOverview(){return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Pick a section on the left.</p></div>`}
+function renderOverview(){return `<div class="card"><h3>${S.guildName}</h3>
+<p class="desc">Where to find the new features:</p>
+<ul class="desc" style="line-height:1.9;margin:12px 0 0 18px">
+<li><span class="hl">Moderation</span> → <b>⚡ SMART AUTOMOD</b> toggle (no API key) + action / block invites / links</li>
+<li><span class="hl">Roles (Reaction)</span> → build &amp; post a reaction-roles panel (emoji + role pairs)</li>
+<li><span class="hl">Engagement</span> → Social feeds (platform + handle, add/remove)</li>
+</ul></div>`}
 function renderSettings(fields){
   if(!fields)return renderOverview();
   const rows=fields.map(f=>{const val=S.settings[f.id];
@@ -88,8 +104,8 @@ function renderSettings(fields){
   let extra=S.view==='tickets'?`<button class="btn btn-secondary" id="btn-ticket-panel" style="margin-top:12px;margin-left:8px">Post ticket panel</button>`:'';
   let social='';
   if(S.view==='engagement'){
-    social=`<div class="card" id="social-feeds-card"><h3>Social notification feeds</h3>
-      <p class="desc">Add platform + handle. Staff post alerts with /social notify. Enable social + pick channel above, then Save.</p>
+    social=`<div class="card"><h3>Social notification feeds</h3>
+      <p class="desc">Platform + handle. Enable social + pick channel above, Save, then add feeds. Staff use /social notify.</p>
       <div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
         <label class="field" style="flex:1;min-width:120px;margin:0">Platform
           <select id="sf-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="twitter">Twitter / X</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option><option value="reddit">Reddit</option></select>
@@ -97,16 +113,16 @@ function renderSettings(fields){
         <label class="field" style="flex:2;min-width:140px;margin:0">Handle<input id="sf-handle" placeholder="e.g. MrBeast"/></label>
         <button class="btn btn-primary" id="btn-sf-add">Add feed</button>
       </div>
-      <div id="sf-list" class="desc" style="margin-top:14px">Loading…</div>
-    </div>`;
+      <div id="sf-list" class="desc" style="margin-top:14px">Loading…</div></div>`;
   }
-  return `<div class="card"><h3>${S.guildName}</h3><p class="desc">${(S.channels||[]).length} channels · ${(S.roles||[]).length} roles</p>${rows}<button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button>${extra}</div>${social}`;
+  return `<div class="card"><h3>${S.guildName} — ${S.view}</h3><p class="desc">${(S.channels||[]).length} channels · ${(S.roles||[]).length} roles</p>${rows}<button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button>${extra}</div>${social}`;
 }
 function renderRolesPanel(){
   const chOpts=channelOptions(''),roleOpts=roleOptions('');
   let rows='';
   for(let i=1;i<=5;i++)rows+=`<div class="row" style="flex-wrap:wrap;gap:8px"><label class="field" style="flex:1;min-width:100px">Emoji ${i}<input data-rr-emoji="${i}" placeholder="🎮"></label><label class="field" style="flex:2;min-width:140px">Role ${i}<select data-rr-role="${i}">${roleOpts}</select></label></div>`;
-  return `<div class="card"><h3>Reaction roles</h3><p class="desc">Post a panel. Members react to get/remove roles.</p>
+  return `<div class="card"><h3>⚡ Reaction roles setup</h3>
+    <p class="desc"><b>Set up reaction roles from the dashboard here.</b> Pick channel → add emoji + role pairs → Post panel. Bot needs Manage Roles + Add Reactions; bot role must be above the roles it assigns.</p>
     <label class="field">Channel<select id="rr-channel">${chOpts}</select></label>
     <label class="field">Title<input id="rr-title" value="Choose your roles"></label>
     <label class="field">Description<textarea id="rr-desc">React below to get a role</textarea></label>
@@ -127,7 +143,7 @@ function bind(){
   if(rrPost)rrPost.onclick=async()=>{const ch=document.getElementById('rr-channel')?.value;if(!ch){toast('Pick a channel');return}const pairs=[];for(let i=1;i<=5;i++){const em=document.querySelector(`[data-rr-emoji="${i}"]`)?.value?.trim();const rid=document.querySelector(`[data-rr-role="${i}"]`)?.value;if(em&&rid)pairs.push({emoji:em,role_id:String(rid)})}if(!pairs.length){toast('Add at least one emoji + role');return}try{await api(`/guilds/${S.guildId}/roles/reaction-panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch),title:document.getElementById('rr-title')?.value||'Roles',description:document.getElementById('rr-desc')?.value||'',pairs})});toast('Reaction panel posted')}catch(e){toast(e.message)}};
   const rrList=document.getElementById('btn-rr-list');
   if(rrList)rrList.onclick=async()=>{try{const r=await api(`/guilds/${S.guildId}/roles/reaction-list`);const items=r.items||[];const el=document.getElementById('rr-list');if(!items.length){el.textContent='No bindings yet.';return}el.innerHTML=items.map(i=>`• ${i.emoji} → role ${i.roleId} · msg ${i.messageId}`).join('<br>')}catch(e){toast(e.message)}};
-  async function loadSocialFeeds(){const el=document.getElementById('sf-list');if(!el||!S.guildId)return;try{const r=await api(`/guilds/${S.guildId}/social/feeds`);const feeds=r.feeds||[];if(!feeds.length){el.innerHTML='<span class="desc">No feeds yet.</span>';return}el.innerHTML=feeds.map((f,i)=>`<div class="row" style="padding:8px 0"><div><strong>${(f.platform||'').toUpperCase()}</strong> · <code>${f.handle||''}</code></div><button class="btn btn-secondary btn-sf-remove" data-idx="${i}" style="padding:6px 12px;font-size:.85rem">Remove</button></div>`).join('');el.querySelectorAll('.btn-sf-remove').forEach(btn=>{btn.onclick=async()=>{try{await api(`/guilds/${S.guildId}/social/feeds/${btn.dataset.idx}`,{method:'DELETE'});toast('Feed removed');loadSocialFeeds()}catch(e){toast(e.message)}}})}catch(e){el.textContent='Could not load feeds: '+e.message}}
+  async function loadSocialFeeds(){const el=document.getElementById('sf-list');if(!el||!S.guildId)return;try{const r=await api(`/guilds/${S.guildId}/social/feeds`);const feeds=r.feeds||[];if(!feeds.length){el.innerHTML='<span class="desc">No feeds yet.</span>';return}el.innerHTML=feeds.map((f,i)=>`<div class="row" style="padding:8px 0"><div><strong>${(f.platform||'').toUpperCase()}</strong> · <code>${f.handle||''}</code></div><button class="btn btn-secondary btn-sf-remove" data-idx="${i}" style="padding:6px 12px;font-size:.85rem">Remove</button></div>`).join('');el.querySelectorAll('.btn-sf-remove').forEach(btn=>{btn.onclick=async()=>{try{await api(`/guilds/${S.guildId}/social/feeds/${btn.dataset.idx}`,{method:'DELETE'});toast('Feed removed');loadSocialFeeds()}catch(e){toast(e.message)}}})}catch(e){el.textContent='Could not load: '+e.message}}
   const sfAdd=document.getElementById('btn-sf-add');
   if(sfAdd)sfAdd.onclick=async()=>{const platform=document.getElementById('sf-platform')?.value||'youtube';const handle=(document.getElementById('sf-handle')?.value||'').trim();if(!handle){toast('Enter a handle');return}try{await api(`/guilds/${S.guildId}/social/feeds`,{method:'POST',body:JSON.stringify({platform,handle})});document.getElementById('sf-handle').value='';toast('Feed added');loadSocialFeeds()}catch(e){toast(e.message)}};
   if(S.view==='engagement')loadSocialFeeds();
