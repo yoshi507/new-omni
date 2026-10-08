@@ -18,6 +18,7 @@ from omnibot.settings_registry import SETTINGS, get_setting_by_id, validate_sett
 from omnibot.web import sessions, oauth
 from omnibot.services import ai_limits
 from omnibot.web.social_routes import register_social_routes
+from omnibot.web.reaction_routes import register_reaction_routes
 
 log = logging.getLogger("omnibot.web")
 PUBLIC_DIR = Path(__file__).resolve().parent.parent.parent / "public" / "dashboard"
@@ -273,57 +274,8 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         storage.update_guild(guild_id, mut)
         return {"ok": True, "messageId": str(msg.id)}
 
-    class ReactionPanelBody(BaseModel):
-        channel_id: str
-        title: str = "Roles"
-        description: str = "React to get a role"
-        pairs: list[dict[str, str]] = []
-
-    @app.post("/guilds/{guild_id}/roles/reaction-panel")
-    async def post_reaction_panel(guild_id: str, body: ReactionPanelBody, request: Request):
-        await _assert_guild_access(request, guild_id)
-        import discord as _discord
-        b = app.state.bot
-        if not b:
-            raise HTTPException(503, "Bot offline")
-        g = b.get_guild(int(guild_id))
-        if not g:
-            raise HTTPException(400, "Bot not in guild")
-        ch = g.get_channel(int(body.channel_id))
-        if not isinstance(ch, _discord.TextChannel):
-            raise HTTPException(400, "Channel not found")
-        pairs = []
-        for p in (body.pairs or [])[:10]:
-            em = str(p.get("emoji") or "").strip()
-            rid = str(p.get("role_id") or "").strip()
-            if em and rid:
-                role = g.get_role(int(rid))
-                if role:
-                    pairs.append((em, role))
-        if not pairs:
-            raise HTTPException(400, "Add at least one emoji + role pair")
-        lines = [f"{em} — {ro.mention}" for em, ro in pairs]
-        emb = _discord.Embed(title=(body.title or "Roles")[:256], description=((body.description or "")[:1200] + "\n\n" + "\n".join(lines))[:4000], color=0x5B6CFF)
-        emb.set_footer(text="React to get or remove a role")
-        msg = await ch.send(embed=emb)
-        failed = []
-        for em, _ in pairs:
-            try:
-                await msg.add_reaction(em)
-            except Exception:
-                failed.append(em)
-        def mut(d):
-            rr = d.setdefault("reactionRoles", {})
-            for em, ro in pairs:
-                rr[f"{msg.id}:{em}"] = {"messageId": str(msg.id), "emoji": em, "roleId": str(ro.id), "channelId": str(ch.id)}
-        storage.update_guild(guild_id, mut)
-        return {"ok": True, "messageId": str(msg.id), "failedEmojis": failed}
-
-    @app.get("/guilds/{guild_id}/roles/reaction-list")
-    async def list_reaction_roles(guild_id: str, request: Request):
-        await _assert_guild_access(request, guild_id)
-        rr = storage.load_guild(guild_id).get("reactionRoles") or {}
-        return {"items": [{"key": k, **v} for k, v in rr.items()]}
+    # Reaction role multi-panel API
+    register_reaction_routes(app, _assert_guild_access)
 
     # Social feeds (platform + handle multi)
     register_social_routes(app, _assert_guild_access)
