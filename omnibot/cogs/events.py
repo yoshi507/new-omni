@@ -1,4 +1,4 @@
-"""Guild events: welcome, goodbye, autorole, leveling, automod, natural AI, deadchat."""
+"""Guild events: welcome, goodbye, autorole, leveling, automod, mention AI, deadchat."""
 from __future__ import annotations
 
 import random
@@ -12,8 +12,6 @@ from discord.ext import commands, tasks
 from omnibot import storage
 from omnibot.services import groq_client
 from omnibot.services.question_packs import pick_question
-
-NATURAL_TRIGGER = re.compile(r"\b(?:omni(?:bot)?)\b", re.I)
 
 
 class Events(commands.Cog):
@@ -119,26 +117,18 @@ class Events(commands.Cog):
     async def before_deadchat(self):
         await self.bot.wait_until_ready()
 
-    def _extract_natural_prompt(self, content: str, guild: discord.Guild) -> str | None:
-        text = content.strip()
-        if not text:
+    def _extract_mention_prompt(self, message: discord.Message) -> str | None:
+        """AI only when the bot is @mentioned — no omni/prefix triggers."""
+        if not message.guild or not message.content:
             return None
-        if NATURAL_TRIGGER.search(text):
-            cleaned = NATURAL_TRIGGER.sub(" ", text)
-            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
-            return cleaned or "hi"
-        me = guild.me
-        if me and me.nick:
-            nick = me.nick.strip()
-            low = text.lower()
-            nlow = nick.lower()
-            if low.startswith(nlow + " ") or low.startswith(nlow + ",") or low.startswith(nlow + ":"):
-                return text[len(nick) :].lstrip(" ,:").strip() or "hi"
-        if me and (f"<@{me.id}>" in text or f"<@!{me.id}>" in text):
-            cleaned = text.replace(f"<@{me.id}>", " ").replace(f"<@!{me.id}>", " ")
-            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
-            return cleaned or "hi"
-        return None
+        me = message.guild.me
+        if not me or me not in message.mentions:
+            return None
+        cleaned = message.content
+        for u in message.mentions:
+            cleaned = cleaned.replace(f"<@{u.id}>", " ").replace(f"<@!{u.id}>", " ")
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
+        return cleaned or "hi"
 
     def _smart_automod_hit(self, content: str, data: dict) -> str | None:
         """Rule-based smart automod — no external API / no Groq key."""
@@ -205,7 +195,6 @@ class Events(commands.Cog):
                     pass
                 return
 
-        # Smart automod (local rules — does NOT use AI API key)
         try:
             reason = self._smart_automod_hit(message.content or "", data)
         except Exception:
@@ -289,17 +278,8 @@ class Events(commands.Cog):
         if not message.content:
             return
 
-        prompt = None
-        me = message.guild.me
-        if me and me in message.mentions:
-            cleaned = message.content
-            for u in message.mentions:
-                cleaned = cleaned.replace(f"<@{u.id}>", " ").replace(f"<@!{u.id}>", " ")
-            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,:;-").strip()
-            prompt = cleaned or "hi"
-        else:
-            prompt = self._extract_natural_prompt(message.content, message.guild)
-
+        # AI: @mention only (no "omni …", no text prefixes)
+        prompt = self._extract_mention_prompt(message)
         dash = data.get("dashboard") or {}
         ai_cfg = dash.get("ai") or {}
         if prompt and ai_cfg.get("naturalInvocation", True) and ai_cfg.get("enabled", True):
