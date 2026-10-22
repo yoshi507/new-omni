@@ -33,6 +33,22 @@ class VoiceExtra(commands.Cog):
         storage.update_guild(interaction.guild.id, mut)
         await interaction.response.send_message(f"Join-to-create lobby: {lobby.mention}", ephemeral=True)
 
+    def _guild_vc(self, guild: discord.Guild) -> discord.VoiceClient | None:
+        """Return this guild's voice client, if any."""
+        cached = self._vc.get(guild.id)
+        if cached and cached.is_connected():
+            return cached
+        # discord.py: Guild.voice_client (singular) or Bot.voice_clients
+        vc = guild.voice_client
+        if vc and vc.is_connected():
+            self._vc[guild.id] = vc  # type: ignore[assignment]
+            return vc  # type: ignore[return-value]
+        for client in self.bot.voice_clients:
+            if getattr(client, "guild", None) and client.guild.id == guild.id and client.is_connected():
+                self._vc[guild.id] = client  # type: ignore[assignment]
+                return client  # type: ignore[return-value]
+        return None
+
     @voice.command(name="join", description="Join your voice channel so Omni can talk")
     async def join(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
@@ -42,15 +58,19 @@ class VoiceExtra(commands.Cog):
         channel = interaction.user.voice.channel
         await interaction.response.defer(ephemeral=True)
         try:
-            vc = self._vc.get(interaction.guild.id)
+            vc = self._guild_vc(interaction.guild)
             if vc and vc.is_connected():
                 if vc.channel and vc.channel.id != channel.id:
                     await vc.move_to(channel)
+                self._vc[interaction.guild.id] = vc
                 await interaction.followup.send(f"Moved to **{channel.name}**.", ephemeral=True)
                 return
             vc = await channel.connect()
             self._vc[interaction.guild.id] = vc
-            await interaction.followup.send(f"Joined **{channel.name}**. Use `/voice talk` or `/voice say`.", ephemeral=True)
+            await interaction.followup.send(
+                f"Joined **{channel.name}**. Use `/voice talk` or `/voice say`.",
+                ephemeral=True,
+            )
         except Exception as e:
             await interaction.followup.send(f"Could not join: {e}", ephemeral=True)
 
@@ -62,13 +82,16 @@ class VoiceExtra(commands.Cog):
         if vc and vc.is_connected():
             await vc.disconnect()
             await interaction.response.send_message("Left voice.", ephemeral=True)
-        else:
-            for client in list(interaction.guild.voice_clients):
-                try:
-                    await client.disconnect()
-                except Exception:
-                    pass
-            await interaction.response.send_message("Not connected / disconnected.", ephemeral=True)
+            return
+        existing = interaction.guild.voice_client
+        if existing and existing.is_connected():
+            try:
+                await existing.disconnect()
+            except Exception:
+                pass
+            await interaction.response.send_message("Left voice.", ephemeral=True)
+            return
+        await interaction.response.send_message("Not connected.", ephemeral=True)
 
     @voice.command(name="say", description="Speak text in VC with your AI personality voice (uses 1 AI quota)")
     @app_commands.describe(text="What Omni should say out loud")
@@ -86,17 +109,12 @@ class VoiceExtra(commands.Cog):
         if not interaction.user.voice or not interaction.user.voice.channel:
             return None
         channel = interaction.user.voice.channel
-        vc = self._vc.get(interaction.guild.id)
+        vc = self._guild_vc(interaction.guild)
         if vc and vc.is_connected():
             if vc.channel and vc.channel.id != channel.id:
                 await vc.move_to(channel)
+            self._vc[interaction.guild.id] = vc
             return vc
-        for client in interaction.guild.voice_clients:
-            if client.is_connected():
-                if client.channel and client.channel.id != channel.id:
-                    await client.move_to(channel)
-                self._vc[interaction.guild.id] = client
-                return client
         vc = await channel.connect()
         self._vc[interaction.guild.id] = vc
         return vc
@@ -202,7 +220,9 @@ class VoiceExtra(commands.Cog):
         )
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    async def on_voice_state_update(
+        self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
+    ):
         if member.bot:
             return
         data = storage.load_guild(member.guild.id)
