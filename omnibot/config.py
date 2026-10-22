@@ -29,6 +29,16 @@ def _int(name: str, default: int) -> int:
 @dataclass
 class Settings:
     discord_token: str = field(default_factory=lambda: os.getenv("DISCORD_TOKEN", "").strip())
+    gamevox_bot_token: str = field(
+        default_factory=lambda: (
+            os.getenv("GAMEVOX_BOT_TOKEN") or os.getenv("GAMEVOX_TOKEN") or ""
+        ).strip()
+    )
+    platform: str = field(
+        default_factory=lambda: (os.getenv("PLATFORM") or os.getenv("BOT_PLATFORM") or "discord")
+        .strip()
+        .lower()
+    )
     discord_client_id: str = field(default_factory=lambda: os.getenv("DISCORD_CLIENT_ID", "").strip())
     discord_client_secret: str = field(
         default_factory=lambda: os.getenv("DISCORD_CLIENT_SECRET", "").strip()
@@ -79,6 +89,12 @@ class Settings:
         self.dashboard_origins = list(dict.fromkeys(origins))
         if not self.discord_redirect_uri:
             self.discord_redirect_uri = f"{self.public_base_url}/auth/discord/callback"
+        # Normalise platform aliases
+        p = self.platform
+        if p in ("gamevox", "gv", "game-vox"):
+            self.platform = "gamevox"
+        else:
+            self.platform = "discord"
 
 
 settings = Settings()

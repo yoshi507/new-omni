@@ -1,7 +1,13 @@
-"""OmniBot entrypoint — Discord bot + dashboard API on one process.
+"""OmniBot entrypoint — Discord or GameVox bot + dashboard API on one process.
 
 Works even if the GitHub zip left files under new-omni-main/ or similar:
 we locate the directory that contains both this file and the omnibot package.
+
+Platform:
+  PLATFORM=discord   (default) — normal Discord
+  PLATFORM=gamevox   — GameVox (Discord-compatible API)
+Set GAMEVOX_BOT_TOKEN when using GameVox. One process = one platform
+(discord.py uses global REST/gateway URLs). Run two servers to be on both.
 """
 from __future__ import annotations
 
@@ -62,6 +68,7 @@ _PROJECT_ROOT = _bootstrap_path()
 import uvicorn
 
 from omnibot.config import settings
+from omnibot.platform import configure_platform, resolve_bot_token, PLATFORM_GAMEVOX
 from omnibot.bot import OmniBot
 from omnibot.web.app import create_app
 
@@ -72,18 +79,29 @@ logging.basicConfig(
 )
 log = logging.getLogger("omnibot")
 
-DEPLOY_MARKER = "2026-09-22-nested-vercel-v1"
+DEPLOY_MARKER = "2026-10-22-gamevox-v1"
 
 
 async def run() -> None:
-    if not settings.discord_token:
-        log.error("DISCORD_TOKEN is missing. Set it in .env or panel env vars and restart.")
+    # Must patch discord.py endpoints BEFORE the bot connects
+    platform = configure_platform(settings.platform)
+    token = resolve_bot_token(platform)
+
+    if not token:
+        if platform == PLATFORM_GAMEVOX:
+            log.error(
+                "GAMEVOX_BOT_TOKEN is missing. Create a bot at https://developers.gamevox.com "
+                "and set GAMEVOX_BOT_TOKEN (and PLATFORM=gamevox)."
+            )
+        else:
+            log.error("DISCORD_TOKEN is missing. Set it in .env or panel env vars and restart.")
         sys.exit(1)
 
-    log.info("[Startup] projectRoot=%s", _PROJECT_ROOT)
+    log.info("[Startup] projectRoot=%s platform=%s", _PROJECT_ROOT, platform)
 
     bot = OmniBot()
     bot.deploy_marker = DEPLOY_MARKER
+    bot.platform = platform  # type: ignore[attr-defined]
     app = create_app(bot=bot, deploy_marker=DEPLOY_MARKER)
 
     config = uvicorn.Config(
@@ -106,9 +124,9 @@ async def run() -> None:
 
     async def start_bot() -> None:
         async with bot:
-            await bot.start(settings.discord_token)
+            await bot.start(token)
 
-    bot_task = asyncio.create_task(start_bot(), name="discord-bot")
+    bot_task = asyncio.create_task(start_bot(), name=f"{platform}-bot")
     web_task = asyncio.create_task(server.serve(), name="web-api")
 
     done, pending = await asyncio.wait(

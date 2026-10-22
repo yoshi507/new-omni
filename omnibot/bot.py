@@ -36,7 +36,8 @@ class OmniBot(commands.Bot):
             help_command=None,
             case_insensitive=True,
         )
-        self.deploy_marker = "2026-10-08-slash-only-no-prefix"
+        self.deploy_marker = "2026-10-22-gamevox-v1"
+        self.platform = getattr(settings, "platform", "discord")
 
     async def setup_hook(self) -> None:
         cogs_dir = Path(__file__).parent / "cogs"
@@ -57,16 +58,23 @@ class OmniBot(commands.Bot):
             log.exception("Slash sync failed")
 
     async def on_ready(self) -> None:
+        plat = getattr(self, "platform", "discord")
         log.info(
-            "✅ OmniBot online as %s · guilds=%s · marker=%s",
+            "✅ OmniBot online as %s · platform=%s · guilds=%s · marker=%s",
             self.user,
+            plat,
             len(self.guilds),
             self.deploy_marker,
+        )
+        watching = (
+            "/help · GameVox"
+            if plat == "gamevox"
+            else "/help · @mention for AI"
         )
         await self.change_presence(
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name="/help · @mention for AI",
+                name=watching,
             )
         )
 
