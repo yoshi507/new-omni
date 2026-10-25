@@ -123,7 +123,15 @@ class OmniBot(commands.Bot):
         self.tree.on_error = self.on_app_command_error  # type: ignore[assignment]
         if self.platform == "gamevox":
             self._adapt_commands_for_gamevox()
-        await self._sync_commands_if_changed()
+        # Sync in the background so a slow/failed sync never keeps the bot offline.
+        self._sync_task = asyncio.create_task(self._sync_after_ready())
+
+    async def _sync_after_ready(self) -> None:
+        try:
+            await self.wait_until_ready()
+            await self._sync_commands_if_changed()
+        except Exception:
+            log.exception("Slash command sync crashed")
 
     def _adapt_commands_for_gamevox(self) -> None:
         """Rename or drop top-level commands whose names GameVox reserves."""
@@ -192,23 +200,35 @@ class OmniBot(commands.Bot):
         app_id = self.application_id
         if not app_id:
             return False
-        good, skipped = 0, []
-        for cmd in self.tree.get_commands():
+        cmds = self.tree.get_commands()
+        log.info("Uploading %s slash command(s) one at a time to find the rejected ones…", len(cmds))
+        good, stripped, skipped = 0, [], []
+        for i, cmd in enumerate(cmds, 1):
             payload = cmd.to_dict(self.tree)
+            name = payload.get("name")
             err = ""
-            for attempt in (payload, self._strip_optional(payload)):
+            for n, attempt in enumerate((payload, self._strip_optional(payload))):
                 try:
                     await self.http.upsert_global_command(app_id, attempt)
                     good += 1
+                    if n:
+                        stripped.append(f"/{name}")
                     break
                 except discord.HTTPException as e:
-                    err = f"HTTP {e.status} {e.code}: {(e.text or '')[:200]}"
+                    err = (e.text or "").replace("\n", " | ")[:300] or "no details"
+                    err = f"HTTP {e.status} code {e.code}: {err}"
             else:
-                skipped.append(f"/{payload.get('name')} ({err})")
+                skipped.append(name)
+                log.warning("REJECTED /%s → %s", name, err)
+            if i % 10 == 0:
+                log.info("…%s/%s commands processed", i, len(cmds))
             await asyncio.sleep(0.3)  # be gentle with rate limits
-        log.info("Uploaded %s slash command(s) one by one", good)
-        for line in skipped:
-            log.warning("Skipped slash command %s", line)
+        log.info(
+            "Slash upload done: %s ok, %s rejected%s",
+            good, len(skipped), f" ({', '.join('/' + n for n in skipped)})" if skipped else "",
+        )
+        if stripped:
+            log.info("Uploaded without optional fields (contexts/nsfw/etc): %s", ", ".join(stripped))
         return good > 0
 
     @classmethod
