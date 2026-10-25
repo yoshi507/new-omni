@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -15,14 +16,19 @@ API = "https://discord.com/api/v10"
 
 
 def login_url(state: str) -> str:
-    redirect = settings.discord_redirect_uri
-    cid = settings.discord_client_id
-    scope = "identify%20guilds"
-    return (
-        f"https://discord.com/api/oauth2/authorize"
-        f"?client_id={cid}&redirect_uri={httpx.URL(redirect)}"
-        f"&response_type=code&scope={scope}&state={state}&prompt=none"
+    """Discord authorize URL with every parameter properly URL-encoded."""
+    query = urlencode(
+        {
+            "client_id": settings.discord_client_id,
+            "redirect_uri": settings.discord_redirect_uri,
+            "response_type": "code",
+            "scope": "identify guilds",
+            "state": state,
+            "prompt": "none",
+        },
+        quote_via=quote,
     )
+    return f"https://discord.com/oauth2/authorize?{query}"
 
 
 async def exchange_code(code: str, redirect_uri: str | None = None) -> dict[str, Any]:

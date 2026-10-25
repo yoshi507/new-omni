@@ -61,40 +61,41 @@ const SECTIONS={
   logging:[{id:'logging.enabled',label:'Logging',type:'bool'},{id:'logging.channelId',label:'Log channel',type:'channel'}],
   tickets:[{id:'tickets.enabled',label:'Tickets',type:'bool'},{id:'tickets.staffRoleId',label:'Staff role',type:'role'},{id:'tickets.panelChannelId',label:'Panel channel',type:'channel'},{id:'tickets.categoryId',label:'Ticket category',type:'channel'}]
 };
+function esc(v){return String(v??'').replace(/[&<>"'`]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]))}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3200)}
 async function api(path,opts={}){const r=await fetch('/api'+path,{credentials:'include',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||e.message||r.statusText)}return r.json()}
 function showLanding(on){document.getElementById('landing').style.display=on?'flex':'none';document.getElementById('app').style.display=on?'none':'grid'}
 async function refreshAuth(){try{const m=await api('/auth/me');S.user=m.user;document.getElementById('side-user').textContent=m.user?.global_name||m.user?.username||'';return true}catch{return false}}
 async function loadGuilds(){const r=await api('/guilds');S.guilds=r.guilds||[]}
 function setView(v){S.view=v;document.querySelectorAll('.side-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));document.getElementById('top-title').textContent=v.charAt(0).toUpperCase()+v.slice(1);render()}
-function channelOptions(sel){return '<option value="">— none —</option>'+(S.channels||[]).map(c=>`<option value="${c.id}" ${String(sel)===String(c.id)?'selected':''}>#${c.name}</option>`).join('')}
-function roleOptions(sel){return '<option value="">— none —</option>'+(S.roles||[]).map(r=>`<option value="${r.id}" ${String(sel)===String(r.id)?'selected':''}>@${r.name}</option>`).join('')}
+function channelOptions(sel){return '<option value="">— none —</option>'+(S.channels||[]).map(c=>`<option value="${esc(c.id)}" ${String(sel)===String(c.id)?'selected':''}>#${esc(c.name)}</option>`).join('')}
+function roleOptions(sel){return '<option value="">— none —</option>'+(S.roles||[]).map(r=>`<option value="${esc(r.id)}" ${String(sel)===String(r.id)?'selected':''}>@${esc(r.name)}</option>`).join('')}
 async function openGuild(id,name){S.guildId=id;S.guildName=name||id;try{const b=await api(`/guilds/${id}/bundle`);S.settings=b.settings||{};S.channels=b.channels||[];S.roles=b.roles||[];document.querySelectorAll('.needs-guild').forEach(el=>el.classList.remove('hidden'));setView('overview')}catch(e){toast(e.message)}}
-function renderServers(){if(!S.guilds.length)return `<div class="card"><p class="desc">No servers where you have Administrator.</p></div>`;return S.guilds.map(g=>`<div class="card server-card" data-id="${g.id}" data-name="${g.name||''}"><strong>${g.name||g.id}</strong><p class="desc">${g.botIn?'Bot is in this server':'Invite the bot'}</p></div>`).join('')}
-function renderOverview(){return `<div class="card"><h3>${S.guildName}</h3><p class="desc">Roles (Reaction) supports <b>multiple</b> panels. Post as many as you need.</p></div>`}
+function renderServers(){if(!S.guilds.length)return `<div class="card"><p class="desc">No servers where you have Administrator.</p></div>`;return S.guilds.map(g=>`<div class="card server-card" data-id="${esc(g.id)}" data-name="${esc(g.name||'')}"><strong>${esc(g.name||g.id)}</strong><p class="desc">${g.botIn?'Bot is in this server':'Invite the bot'}</p></div>`).join('')}
+function renderOverview(){return `<div class="card"><h3>${esc(S.guildName)}</h3><p class="desc">Roles (Reaction) supports <b>multiple</b> panels. Post as many as you need.</p></div>`}
 function renderSettings(fields){
   if(!fields)return renderOverview();
   const rows=fields.map(f=>{const val=S.settings[f.id];
     if(f.type==='bool')return `<div class="row"><div><div>${f.label}</div>${f.hint?`<div class="desc">${f.hint}</div>`:''}</div><div class="switch ${val?'on':''}" data-id="${f.id}"></div></div>`;
     if(f.type==='channel')return `<label class="field">${f.label}<select data-id="${f.id}">${channelOptions(val)}</select></label>`;
     if(f.type==='role')return `<label class="field">${f.label}<select data-id="${f.id}">${roleOptions(val)}</select></label>`;
-    if(f.type==='select')return `<label class="field">${f.label}<select data-id="${f.id}">${(f.options||[]).map(o=>`<option ${val===o?'selected':''}>${o}</option>`).join('')}</select></label>`;
-    if(f.type==='textarea')return `<label class="field">${f.label}<textarea data-id="${f.id}">${val??''}</textarea></label>`;
-    return `<label class="field">${f.label}<input data-id="${f.id}" type="${f.type==='number'?'number':'text'}" value="${val??''}"></label>`;
+    if(f.type==='select')return `<label class="field">${f.label}<select data-id="${f.id}">${(f.options||[]).map(o=>`<option ${val===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>`;
+    if(f.type==='textarea')return `<label class="field">${f.label}<textarea data-id="${f.id}">${esc(val)}</textarea></label>`;
+    return `<label class="field">${f.label}<input data-id="${f.id}" type="${f.type==='number'?'number':'text'}" value="${esc(val)}"></label>`;
   }).join('');
   let extra=S.view==='tickets'?`<button class="btn btn-secondary" id="btn-ticket-panel" style="margin-top:12px;margin-left:8px">Post ticket panel</button>`:'';
   let social='';
   if(S.view==='engagement'){
     social=`<div class="card"><h3>Social notification feeds</h3>
-      <p class="desc">Platform + handle. Enable social + channel above, Save, then add feeds.</p>
+      <p class="desc">Supported: YouTube (@handle or channel ID), Twitch (login name, needs TWITCH_CLIENT_ID/SECRET) and Reddit (subreddit). Enable social + pick a channel above, Save, then add feeds. New posts are checked every 5 minutes.</p>
       <div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
-        <label class="field" style="flex:1;min-width:120px;margin:0">Platform<select id="sf-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="twitter">Twitter / X</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option><option value="reddit">Reddit</option></select></label>
-        <label class="field" style="flex:2;min-width:140px;margin:0">Handle<input id="sf-handle" placeholder="e.g. MrBeast"/></label>
+        <label class="field" style="flex:1;min-width:120px;margin:0">Platform<select id="sf-platform"><option value="youtube">YouTube</option><option value="twitch">Twitch</option><option value="reddit">Reddit</option></select></label>
+        <label class="field" style="flex:2;min-width:140px;margin:0">Handle<input id="sf-handle" placeholder="YouTube @handle, Twitch login or subreddit"/></label>
         <button class="btn btn-primary" id="btn-sf-add">Add feed</button>
       </div>
       <div id="sf-list" class="desc" style="margin-top:14px">Loading…</div></div>`;
   }
-  return `<div class="card"><h3>${S.guildName} — ${S.view}</h3><p class="desc">${(S.channels||[]).length} channels · ${(S.roles||[]).length} roles</p>${rows}<button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button>${extra}</div>${social}`;
+  return `<div class="card"><h3>${esc(S.guildName)} — ${esc(S.view)}</h3><p class="desc">${(S.channels||[]).length} channels · ${(S.roles||[]).length} roles</p>${rows}<button class="btn btn-primary" id="btn-save" style="margin-top:18px">Save changes</button>${extra}</div>${social}`;
 }
 function renderRolesPanel(){
   const chOpts=channelOptions(''),roleOpts=roleOptions('');
@@ -129,8 +130,8 @@ function bind(){
       const panels=r.panels||[];
       if(!panels.length){el.innerHTML='<span class="desc">No panels yet — post one above.</span>';return;}
       el.innerHTML=panels.map(p=>{
-        const binds=(p.bindings||[]).map(b=>`${b.emoji} → role ${b.roleId}`).join(' · ')||'no bindings';
-        return `<div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-start"><div style="flex:1;min-width:180px"><strong>${p.title||'Panel'}</strong><div class="desc">msg <code>${p.messageId}</code> · channel <code>${p.channelId||'?'}</code><br>${binds}</div></div><button class="btn btn-secondary btn-rr-remove" data-mid="${p.messageId}" style="padding:6px 12px;font-size:.85rem">Remove panel</button></div>`;
+        const binds=(p.bindings||[]).map(b=>`${esc(b.emoji)} → role ${esc(b.roleId)}`).join(' · ')||'no bindings';
+        return `<div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-start"><div style="flex:1;min-width:180px"><strong>${esc(p.title||'Panel')}</strong><div class="desc">msg <code>${esc(p.messageId)}</code> · channel <code>${esc(p.channelId||'?')}</code><br>${binds}</div></div><button class="btn btn-secondary btn-rr-remove" data-mid="${esc(p.messageId)}" style="padding:6px 12px;font-size:.85rem">Remove panel</button></div>`;
       }).join('');
       el.querySelectorAll('.btn-rr-remove').forEach(btn=>{btn.onclick=async()=>{if(!confirm('Remove this panel\'s role bindings?'))return;try{await api(`/guilds/${S.guildId}/roles/reaction-panel/${btn.dataset.mid}`,{method:'DELETE'});toast('Panel removed');loadRrPanels()}catch(e){toast(e.message)}}});
     }catch(e){el.textContent='Could not load panels: '+e.message}
@@ -138,7 +139,7 @@ function bind(){
   const rrPost=document.getElementById('btn-rr-post');
   if(rrPost)rrPost.onclick=async()=>{const ch=document.getElementById('rr-channel')?.value;if(!ch){toast('Pick a channel');return}const pairs=[];for(let i=1;i<=5;i++){const em=document.querySelector(`[data-rr-emoji="${i}"]`)?.value?.trim();const rid=document.querySelector(`[data-rr-role="${i}"]`)?.value;if(em&&rid)pairs.push({emoji:em,role_id:String(rid)})}if(!pairs.length){toast('Add at least one emoji + role');return}try{await api(`/guilds/${S.guildId}/roles/reaction-panel`,{method:'POST',body:JSON.stringify({channel_id:String(ch),title:document.getElementById('rr-title')?.value||'Roles',description:document.getElementById('rr-desc')?.value||'',pairs})});toast('New panel posted — existing panels stay active');loadRrPanels()}catch(e){toast(e.message)}};
   if(S.view==='roles')loadRrPanels();
-  async function loadSocialFeeds(){const el=document.getElementById('sf-list');if(!el||!S.guildId)return;try{const r=await api(`/guilds/${S.guildId}/social/feeds`);const feeds=r.feeds||[];if(!feeds.length){el.innerHTML='<span class="desc">No feeds yet.</span>';return}el.innerHTML=feeds.map((f,i)=>`<div class="row" style="padding:8px 0"><div><strong>${(f.platform||'').toUpperCase()}</strong> · <code>${f.handle||''}</code></div><button class="btn btn-secondary btn-sf-remove" data-idx="${i}" style="padding:6px 12px;font-size:.85rem">Remove</button></div>`).join('');el.querySelectorAll('.btn-sf-remove').forEach(btn=>{btn.onclick=async()=>{try{await api(`/guilds/${S.guildId}/social/feeds/${btn.dataset.idx}`,{method:'DELETE'});toast('Feed removed');loadSocialFeeds()}catch(e){toast(e.message)}}})}catch(e){el.textContent='Could not load: '+e.message}}
+  async function loadSocialFeeds(){const el=document.getElementById('sf-list');if(!el||!S.guildId)return;try{const r=await api(`/guilds/${S.guildId}/social/feeds`);const feeds=r.feeds||[];if(!feeds.length){el.innerHTML='<span class="desc">No feeds yet.</span>';return}el.innerHTML=feeds.map((f,i)=>`<div class="row" style="padding:8px 0"><div><strong>${esc((f.platform||'').toUpperCase())}</strong> · <code>${esc(f.handle||'')}</code></div><button class="btn btn-secondary btn-sf-remove" data-idx="${i}" style="padding:6px 12px;font-size:.85rem">Remove</button></div>`).join('');el.querySelectorAll('.btn-sf-remove').forEach(btn=>{btn.onclick=async()=>{try{await api(`/guilds/${S.guildId}/social/feeds/${btn.dataset.idx}`,{method:'DELETE'});toast('Feed removed');loadSocialFeeds()}catch(e){toast(e.message)}}})}catch(e){el.textContent='Could not load: '+e.message}}
   const sfAdd=document.getElementById('btn-sf-add');
   if(sfAdd)sfAdd.onclick=async()=>{const platform=document.getElementById('sf-platform')?.value||'youtube';const handle=(document.getElementById('sf-handle')?.value||'').trim();if(!handle){toast('Enter a handle');return}try{await api(`/guilds/${S.guildId}/social/feeds`,{method:'POST',body:JSON.stringify({platform,handle})});document.getElementById('sf-handle').value='';toast('Feed added');loadSocialFeeds()}catch(e){toast(e.message)}};
   if(S.view==='engagement')loadSocialFeeds();
