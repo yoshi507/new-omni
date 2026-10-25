@@ -34,6 +34,21 @@ def _prefix(bot: commands.Bot, message: discord.Message):
     return commands.when_mentioned(bot, message)
 
 
+# GameVox answers these itself and refuses to let apps register them
+# (400 / 50035 — one reserved name fails the whole bulk sync).
+# https://developers.gamevox.com/docs/slash-commands/
+GAMEVOX_RESERVED = frozenset({
+    "ban", "unban", "kick", "clear", "slowmode",
+    "8ball", "flip", "choice", "ascii", "qrcode", "love",
+    "serverinfo", "userinfo", "avatar",
+    "afk", "remindme", "welcome", "goodbye",
+    "me", "poll", "shrug", "tableflip", "unflip", "lenny",
+})
+# OmniBot-specific commands that clash: keep them under a new name on GameVox.
+# Anything reserved and not listed here is dropped (GameVox's built-in covers it).
+GAMEVOX_RENAMES = {"welcome": "welcome-setup", "goodbye": "goodbye-setup", "poll": "vote"}
+
+
 def _complete_app_info(data: dict | None, user: discord.ClientUser | None) -> dict:
     """Fill fields some Discord-compatible platforms (GameVox) leave out of
     /oauth2/applications/@me, so discord.py's AppInfo doesn't KeyError on login."""
@@ -106,7 +121,29 @@ class OmniBot(commands.Bot):
                 log.error("Failed to load %s:\n%s", ext, traceback.format_exc())
 
         self.tree.on_error = self.on_app_command_error  # type: ignore[assignment]
+        if self.platform == "gamevox":
+            self._adapt_commands_for_gamevox()
         await self._sync_commands_if_changed()
+
+    def _adapt_commands_for_gamevox(self) -> None:
+        """Rename or drop top-level commands whose names GameVox reserves."""
+        renamed, dropped = [], []
+        for cmd in list(self.tree.get_commands()):
+            if cmd.name not in GAMEVOX_RESERVED:
+                continue
+            self.tree.remove_command(cmd.name)
+            new = GAMEVOX_RENAMES.get(cmd.name)
+            if new and self.tree.get_command(new) is None:
+                old = cmd.name
+                cmd.name = new
+                self.tree.add_command(cmd)
+                renamed.append(f"/{old} → /{new}")
+            else:
+                dropped.append(f"/{cmd.name}")
+        if renamed:
+            log.info("GameVox: renamed reserved commands: %s", ", ".join(renamed))
+        if dropped:
+            log.info("GameVox: using GameVox's built-in %s instead of OmniBot's", ", ".join(dropped))
 
     async def _sync_commands_if_changed(self) -> None:
         """Global sync only when the command tree changed (saves rate limit + startup time)."""

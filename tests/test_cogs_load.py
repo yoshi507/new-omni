@@ -99,3 +99,23 @@ def test_one_by_one_sync_skips_bad_commands():
         await bot.close()
 
     asyncio.run(run())
+
+
+def test_gamevox_reserved_names_are_renamed_or_dropped():
+    from omnibot.bot import GAMEVOX_RENAMES, GAMEVOX_RESERVED
+
+    async def run():
+        bot = OmniBot()
+        bot.platform = "gamevox"
+        for name in COGS:
+            await bot.load_extension(f"omnibot.cogs.{name}")
+        bot._adapt_commands_for_gamevox()
+        names = {c.name for c in bot.tree.get_commands()}
+        assert not names & GAMEVOX_RESERVED
+        for new in GAMEVOX_RENAMES.values():
+            assert new in names
+        for c in bot.tree.get_commands():
+            c.to_dict(bot.tree)
+        await bot.close()
+
+    asyncio.run(run())
