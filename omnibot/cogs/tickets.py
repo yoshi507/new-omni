@@ -1,6 +1,7 @@
 """Ticket system — custom staff buttons, optional modal form, staff roles."""
 from __future__ import annotations
 
+import logging
 import re
 import time
 import uuid
@@ -10,6 +11,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 def _slug(s: str) -> str:
@@ -409,7 +412,7 @@ class Tickets(commands.Cog):
                         f"🎫 Ticket **{tid}** ({kind}) by {interaction.user.mention} → {ch.mention}"
                     )
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
         await interaction.followup.send(f"Ticket created: {ch.mention}", ephemeral=True)
 
@@ -450,7 +453,7 @@ class Tickets(commands.Cog):
         try:
             await interaction.channel.delete(reason=f"Closed by {interaction.user}")  # type: ignore
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
@@ -503,7 +506,7 @@ class Tickets(commands.Cog):
             try:
                 await interaction.channel.delete(reason=f"Closed by {interaction.user}")  # type: ignore
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             return
 
         if cid.startswith("omnibot:ticket:btn:"):

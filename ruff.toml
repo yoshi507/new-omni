@@ -1,0 +1,7 @@
+target-version = "py310"
+line-length = 120
+extend-exclude = ["data"]
+
+[lint]
+# Real bugs only: pyflakes, import order, syntax errors, common bug patterns.
+select = ["F", "I", "E9", "B006", "B023", "B007"]

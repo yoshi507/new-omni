@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import os
 
+_log = logging.getLogger(__name__)
+
 log = logging.getLogger("omnibot.platform")
 
 PLATFORM_DISCORD = "discord"
@@ -42,9 +44,8 @@ def configure_platform(platform: str | None = None) -> str:
     Must run before OmniBot is constructed / started.
     Returns the resolved platform name.
     """
-    import discord
-    from discord.http import Route
     from discord.gateway import DiscordWebSocket
+    from discord.http import Route
 
     plat = (platform or resolve_platform()).strip().lower()
     if plat in ("gamevox", "gv", "game-vox"):
@@ -65,7 +66,7 @@ def configure_platform(platform: str | None = None) -> str:
     try:
         DiscordWebSocket.DEFAULT_GATEWAY = DISCORD_GATEWAY
     except Exception:
-        pass
+        _log.debug("Ignored error", exc_info=True)
     log.info("Platform=Discord · REST=%s", getattr(Route, "BASE", DISCORD_REST_BASE))
     return PLATFORM_DISCORD
 

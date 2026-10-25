@@ -1,11 +1,15 @@
 """Community tools: giveaways, reaction roles, partner, captcha, userphone, quiz, translate."""
 from __future__ import annotations
 
+import logging
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 class Community(commands.Cog):
@@ -104,7 +108,7 @@ class Community(commands.Cog):
                 if isinstance(old_ch, discord.TextChannel):
                     await (await old_ch.fetch_message(int(v["messageId"]))).delete()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
         view = discord.ui.View(timeout=None)
         view.add_item(
             discord.ui.Button(

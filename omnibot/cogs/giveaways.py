@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 
@@ -10,6 +11,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 class Giveaways(commands.Cog):
@@ -67,7 +70,7 @@ class Giveaways(commands.Cog):
                 names = ", ".join(u.mention for u in picked)
                 await channel.send(f"🎉 Giveaway ended! Prize: **{prize}**\nWinner(s): {names}")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             finally:
 
                 def clear(d):

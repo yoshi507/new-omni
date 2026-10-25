@@ -1,6 +1,7 @@
 """Autorole, reaction roles (multi-panel + bind), give/remove roles."""
 from __future__ import annotations
 
+import logging
 import re
 
 import discord
@@ -8,6 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 def _emoji_key(emoji) -> str:
@@ -314,7 +317,7 @@ class Roles(commands.Cog):
             try:
                 await member.add_roles(role, reason="Reaction role")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
@@ -337,7 +340,7 @@ class Roles(commands.Cog):
             try:
                 await member.remove_roles(role, reason="Reaction role remove")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -350,7 +353,7 @@ class Roles(commands.Cog):
             try:
                 await member.add_roles(role, reason="Autorole")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
 
 async def setup(bot: commands.Bot):

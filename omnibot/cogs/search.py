@@ -4,9 +4,9 @@ from __future__ import annotations
 from urllib.parse import quote
 
 import discord
+import httpx
 from discord import app_commands
 from discord.ext import commands
-import httpx
 
 
 class Search(commands.Cog):
@@ -45,7 +45,7 @@ class Search(commands.Cog):
         await interaction.response.defer()
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                r = await client.get(f"https://api.urbandictionary.com/v0/define", params={"term": term})
+                r = await client.get("https://api.urbandictionary.com/v0/define", params={"term": term})
                 data = r.json()
                 defs = data.get("list") or []
                 if not defs:

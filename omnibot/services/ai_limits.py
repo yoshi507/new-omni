@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from omnibot.config import settings
 from omnibot import storage
+from omnibot.config import settings
 
 
 def _today() -> str:

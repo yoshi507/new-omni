@@ -7,7 +7,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-
 TRIVIA = [
     ("What is the capital of France?", "paris"),
     ("How many continents are there?", "7"),

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import time
 
 import discord
@@ -9,6 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 def _bot_member(guild: discord.Guild) -> discord.Member | None:
@@ -66,7 +69,7 @@ async def _modlog(guild: discord.Guild, embed: discord.Embed) -> None:
         try:
             await ch.send(embed=embed)
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
 
 class Moderation(commands.Cog):
@@ -231,7 +234,7 @@ class Moderation(commands.Cog):
         try:
             await member.send(f"You were warned in **{interaction.guild.name}**: {reason}\nTotal warnings: **{count}**")
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
     @app_commands.command(name="warnings", description="List warnings for a member")
     @app_commands.default_permissions(moderate_members=True)

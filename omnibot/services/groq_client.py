@@ -6,8 +6,8 @@ from typing import Any
 
 import httpx
 
-from omnibot.config import settings
 from omnibot import storage
+from omnibot.config import settings
 from omnibot.services import ai_limits, concurrency
 
 log = logging.getLogger("omnibot.groq")

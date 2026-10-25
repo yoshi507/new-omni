@@ -1,6 +1,7 @@
 """Roleplay actions + relationship (marry / ship / status) system."""
 from __future__ import annotations
 
+import logging
 import random
 import time
 
@@ -9,6 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 RP_ACTIONS: dict[str, tuple[str, str]] = {
     "hug": ("{a} gives {b} a warm hug!", "🤗"),
@@ -93,7 +96,7 @@ class SocialSystems(commands.Cog):
             try:
                 storage.update_guild(interaction.guild.id, mut)
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     @rp.command(name="list", description="List available RP actions")
     async def rp_list(self, interaction: discord.Interaction):
