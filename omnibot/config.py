@@ -26,27 +26,6 @@ def _int(name: str, default: int) -> int:
         return default
 
 
-def _load_or_create_secret() -> str:
-    """Use a random secret persisted in DATA_DIR when SESSION_SECRET isn't set."""
-    import secrets as _secrets
-
-    path = DATA_DIR / ".session_secret"
-    try:
-        existing = path.read_text(encoding="utf-8").strip()
-        if len(existing) >= 32:
-            return existing
-    except OSError:
-        pass
-    value = _secrets.token_urlsafe(48)
-    try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(value, encoding="utf-8")
-        os.chmod(path, 0o600)
-    except OSError:
-        pass  # in-memory only: sessions won't survive a restart
-    return value
-
-
 @dataclass
 class Settings:
     discord_token: str = field(default_factory=lambda: os.getenv("DISCORD_TOKEN", "").strip())
@@ -56,7 +35,7 @@ class Settings:
         ).strip()
     )
     platform: str = field(
-        default_factory=lambda: (os.getenv("PLATFORM") or os.getenv("BOT_PLATFORM") or "discord")
+        default_factory=lambda: (os.getenv("PLATFORM") or os.getenv("BOT_PLATFORM") or "auto")
         .strip()
         .lower()
     )
@@ -69,7 +48,9 @@ class Settings:
     )
     discord_redirect_uri: str = field(default_factory=lambda: os.getenv("DISCORD_REDIRECT_URI", "").strip())
     port: int = field(default_factory=lambda: _int("PORT", _int("SERVER_PORT", 13893)))
-    session_secret: str = field(default_factory=lambda: os.getenv("SESSION_SECRET", "").strip())
+    session_secret: str = field(
+        default_factory=lambda: os.getenv("SESSION_SECRET", "change-me-in-production-please")
+    )
     groq_api_key: str = field(
         default_factory=lambda: (
             os.getenv("GROQ_API_KEY") or os.getenv("GROQ_KEY") or os.getenv("GROQ_TOKEN") or ""
@@ -94,14 +75,11 @@ class Settings:
         default_factory=lambda: os.getenv("SOUNDCLOUD_CLIENT_ID", "").strip()
     )
     dashboard_origins: list[str] = field(default_factory=list)
-    twitch_client_id: str = field(default_factory=lambda: os.getenv("TWITCH_CLIENT_ID", "").strip())
-    twitch_client_secret: str = field(
-        default_factory=lambda: os.getenv("TWITCH_CLIENT_SECRET", "").strip()
-    )
-    force_command_sync: bool = field(default_factory=lambda: _bool("FORCE_COMMAND_SYNC", False))
+    default_prefix: str = field(default_factory=lambda: os.getenv("DEFAULT_PREFIX", "!")[:5] or "!")
     ai_daily_limit: int = field(default_factory=lambda: _int("AI_DAILY_LIMIT", 20))
     ssl_key_path: str = field(default_factory=lambda: os.getenv("SSL_KEY_PATH", "").strip())
     ssl_cert_path: str = field(default_factory=lambda: os.getenv("SSL_CERT_PATH", "").strip())
+    force_command_sync: bool = field(default_factory=lambda: _bool("FORCE_COMMAND_SYNC", False))
 
     def __post_init__(self) -> None:
         raw = os.getenv("DASHBOARD_ORIGINS", "")
@@ -112,12 +90,13 @@ class Settings:
         self.dashboard_origins = list(dict.fromkeys(origins))
         if not self.discord_redirect_uri:
             self.discord_redirect_uri = f"{self.public_base_url}/auth/discord/callback"
-        if not self.session_secret or self.session_secret == "change-me-in-production-please":
-            self.session_secret = _load_or_create_secret()
-        # Normalise platform aliases
         p = self.platform
         if p in ("gamevox", "gv", "game-vox"):
             self.platform = "gamevox"
+        elif p in ("both", "all", "dual"):
+            self.platform = "both"
+        elif p in ("auto", "", "default"):
+            self.platform = "auto"
         else:
             self.platform = "discord"
 
