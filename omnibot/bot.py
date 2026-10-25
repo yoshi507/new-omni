@@ -94,6 +94,54 @@ class OmniBot(commands.Bot):
         self.deploy_marker = DEPLOY_MARKER
         self.platform = getattr(settings, "platform", "discord")
 
+    def _intent_fallbacks(self) -> list[tuple[discord.Intents, str]]:
+        """Full intents first, then progressively drop privileged ones."""
+        full = discord.Intents(**dict(INTENTS))
+        no_members = discord.Intents(**dict(INTENTS))
+        no_members.members = False
+        no_content = discord.Intents(**dict(INTENTS))
+        no_content.message_content = False
+        neither = discord.Intents(**dict(INTENTS))
+        neither.members = neither.message_content = False
+        return [
+            (full, ""),
+            (no_members, "Server Members intent OFF — welcome/goodbye, autorole, member logs and counters won't fire"),
+            (no_content, "Message Content intent OFF — automod/triggers can't read messages (AI still works on @mention)"),
+            (neither, "Server Members + Message Content intents OFF — most automatic features are disabled"),
+        ]
+
+    def _apply_intents(self, intents: discord.Intents) -> None:
+        state = self._connection
+        state._intents = intents
+        state.member_cache_flags = discord.MemberCacheFlags.from_intents(intents)
+        state._chunk_guilds = intents.members
+
+    async def start(self, token: str, *, reconnect: bool = True) -> None:
+        """Like Client.start, but falls back to fewer privileged intents on 4014."""
+        await self.login(token)
+        portal = (
+            "https://developers.gamevox.com → Applications → your app → Bot tab"
+            if self.platform == "gamevox"
+            else "https://discord.com/developers/applications → your app → Bot"
+        )
+        last_exc: Exception | None = None
+        for intents, warning in self._intent_fallbacks():
+            self._apply_intents(intents)
+            if warning:
+                log.warning("Retrying gateway with reduced intents: %s", warning)
+            try:
+                await self.connect(reconnect=reconnect)
+                return
+            except discord.PrivilegedIntentsRequired as e:
+                last_exc = e
+                log.error(
+                    "Gateway refused privileged intents (4014). Turn ON 'Server Members Intent' and "
+                    "'Message Content Intent' at %s and Save — it must be the same app as your bot token.",
+                    portal,
+                )
+        assert last_exc is not None
+        raise last_exc
+
     async def application_info(self) -> discord.AppInfo:
         """Tolerant version: works on Discord and on GameVox's partial payload."""
         try:

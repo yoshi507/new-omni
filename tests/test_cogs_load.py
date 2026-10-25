@@ -119,3 +119,27 @@ def test_gamevox_reserved_names_are_renamed_or_dropped():
         await bot.close()
 
     asyncio.run(run())
+
+
+def test_privileged_intents_fallback():
+    async def run():
+        bot = OmniBot()
+        tried = []
+
+        async def fake_login(token):
+            return None
+
+        async def fake_connect(reconnect=True):
+            i = bot._connection._intents
+            tried.append((i.members, i.message_content))
+            if i.members:  # pretend Server Members isn't enabled in the portal
+                raise discord.PrivilegedIntentsRequired(None)
+
+        bot.login = fake_login
+        bot.connect = fake_connect
+        await bot.start("x")
+        assert tried == [(True, True), (False, True)]
+        assert bot._connection._chunk_guilds is False
+        await bot.close()
+
+    asyncio.run(run())
