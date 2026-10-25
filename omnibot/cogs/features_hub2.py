@@ -1,17 +1,19 @@
 """Feature hub 2: bump, analytics, social, docs, forms, casino."""
 from __future__ import annotations
 
-import json
+import logging
 import random
 import re
 import time
-from datetime import datetime, timezone
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
 from omnibot import storage
+from omnibot.services import social_feeds
+
+_log = logging.getLogger(__name__)
 
 
 def _parse_color(s: str | None, default: int = 0x5B6CFF) -> int:
@@ -103,7 +105,7 @@ class FeaturesHub2(commands.Cog):
                 try:
                     await ch.send(br.get("message") or "⏰ Time to `/bump` the server!")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
             except Exception:
                 continue
 
@@ -187,21 +189,37 @@ class FeaturesHub2(commands.Cog):
             ephemeral=True,
         )
 
-    @social.command(name="add", description="Add a feed label (YouTube/Twitch/Twitter handle)")
+    @social.command(name="add", description="Follow a YouTube channel, subreddit or Twitch streamer")
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.choices(platform=[
+        app_commands.Choice(name="YouTube", value="youtube"),
+        app_commands.Choice(name="Reddit", value="reddit"),
+        app_commands.Choice(name="Twitch", value="twitch"),
+    ])
     async def social_add(
-        self, interaction: discord.Interaction, platform: str, handle: str
+        self, interaction: discord.Interaction, platform: app_commands.Choice[str], handle: str
     ):
-        platform = platform.strip().lower()
-        handle = handle.strip().lstrip("@")
+        try:
+            plat, clean = social_feeds.normalise(platform.value, handle)
+        except social_feeds.FeedError as e:
+            return await interaction.response.send_message(str(e), ephemeral=True)
 
         def mut(d):
             feeds = d.setdefault("social", {}).setdefault("feeds", [])
-            feeds.append({"platform": platform[:32], "handle": handle[:64]})
+            if any(
+                str(f.get("platform", "")).lower() == plat and str(f.get("handle", "")).lower() == clean.lower()
+                for f in feeds
+            ):
+                return
+            feeds.append({"platform": plat, "handle": clean})
             d["social"]["feeds"] = feeds[-20:]
 
         storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message(f"Added **{platform}** / **{handle}**.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Following **{platform.name}** / **{discord.utils.escape_markdown(clean)}**. "
+            "New posts are checked every 5 minutes.",
+            ephemeral=True,
+        )
 
     @social.command(name="list", description="List configured social feeds")
     async def social_list(self, interaction: discord.Interaction):
@@ -303,7 +321,7 @@ class FeaturesHub2(commands.Cog):
             def __init__(self):
                 super().__init__()
                 self.inputs = []
-                for i, label in enumerate((form.get("fields") or [])[:5]):
+                for _i, label in enumerate((form.get("fields") or [])[:5]):
                     ti = discord.ui.TextInput(
                         label=str(label)[:45],
                         style=discord.TextStyle.paragraph,
