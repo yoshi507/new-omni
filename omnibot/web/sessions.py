@@ -18,11 +18,20 @@ import secrets
 import time
 from typing import Any
 
-from cryptography.fernet import Fernet, InvalidToken
-
 from omnibot.config import DATA_DIR, settings
 
 log = logging.getLogger("omnibot.sessions")
+
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+except ImportError:  # pragma: no cover - depends on host install
+    Fernet = None  # type: ignore[assignment,misc]
+    InvalidToken = Exception  # type: ignore[assignment,misc]
+    log.warning(
+        "Package 'cryptography' is not installed — dashboard sessions will be kept in memory only "
+        "(everyone is logged out on restart). Fix: pip install cryptography, or point the panel's "
+        "REQUIREMENTS_FILE at the requirements.txt next to the omnibot/ folder."
+    )
 
 _SESSIONS: dict[str, dict[str, Any]] = {}  # key = sha256(sid)
 TTL = 60 * 60 * 24 * 7  # 7 days
@@ -37,7 +46,9 @@ _last_save = 0.0
 _OAUTH_STATES: dict[str, float] = {}
 
 
-def _fernet() -> Fernet:
+def _fernet():
+    if Fernet is None:
+        return None
     key = hashlib.sha256(("omnibot-session:" + settings.session_secret).encode()).digest()
     return Fernet(base64.urlsafe_b64encode(key))
 
@@ -73,7 +84,7 @@ def _prune(now: float | None = None) -> int:
 
 def _load() -> None:
     global _SESSIONS, _dirty
-    if not _STORE.exists():
+    if _FERNET is None or not _STORE.exists():
         return
     try:
         raw = json.loads(_STORE.read_text(encoding="utf-8"))
@@ -107,6 +118,9 @@ def _save(force: bool = False) -> None:
     if not force and (now - _last_save) < 2.0:
         return
     _prune(now)
+    if _FERNET is None:  # never write tokens to disk unencrypted
+        _dirty = False
+        return
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         payload = {}
