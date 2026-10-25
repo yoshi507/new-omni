@@ -16,7 +16,6 @@ import logging
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
@@ -83,6 +82,14 @@ log = logging.getLogger("omnibot")
 _ROLE = (os.getenv("OMNIBOT_ROLE") or "primary").strip().lower()
 
 
+def _mask(token: str) -> str:
+    if not token:
+        return "missing"
+    if len(token) < 12:
+        return "set(short)"
+    return f"set(…{token[-6:]})"
+
+
 def _resolve_targets() -> tuple[bool, bool]:
     """Return (run_discord, run_gamevox) for this process."""
     if _ROLE in ("gamevox", "gamevox-worker", "gv-worker"):
@@ -92,19 +99,48 @@ def _resolve_targets() -> tuple[bool, bool]:
     has_discord = bool(settings.discord_token)
     has_gamevox = bool(settings.gamevox_bot_token)
 
+    log.info(
+        "[Startup] PLATFORM=%s DISCORD_TOKEN=%s GAMEVOX_BOT_TOKEN=%s",
+        plat,
+        _mask(settings.discord_token),
+        _mask(settings.gamevox_bot_token),
+    )
+
     if plat == "discord":
+        if has_gamevox:
+            log.warning(
+                "PLATFORM=discord — GameVox token is set but ignored. "
+                "Use PLATFORM=auto or PLATFORM=both to run both."
+            )
         return has_discord, False
     if plat == "gamevox":
+        if has_discord:
+            log.warning(
+                "PLATFORM=gamevox — Discord token is set but IGNORED. "
+                "Discord will stay offline. Set PLATFORM=auto or PLATFORM=both to run both."
+            )
         return False, has_gamevox
     if plat == "both":
+        if not has_discord:
+            log.error("PLATFORM=both but DISCORD_TOKEN is empty")
+        if not has_gamevox:
+            log.error("PLATFORM=both but GAMEVOX_BOT_TOKEN is empty")
         return has_discord, has_gamevox
 
     # auto
     if has_discord and has_gamevox:
+        log.info("[Startup] PLATFORM=auto → running Discord + GameVox (isolated processes)")
         return True, True
     if has_gamevox and not has_discord:
+        log.warning(
+            "[Startup] PLATFORM=auto → only GAMEVOX_BOT_TOKEN found; Discord will be offline. "
+            "Add DISCORD_TOKEN to also run on Discord."
+        )
         return False, True
-    return has_discord, False
+    if has_discord:
+        log.info("[Startup] PLATFORM=auto → only DISCORD_TOKEN found; Discord only")
+        return True, False
+    return False, False
 
 
 def _spawn_gamevox_worker() -> subprocess.Popen | None:
@@ -112,7 +148,6 @@ def _spawn_gamevox_worker() -> subprocess.Popen | None:
     env = os.environ.copy()
     env["OMNIBOT_ROLE"] = "gamevox-worker"
     env["PLATFORM"] = "gamevox"
-    # Child must not try to bind the same PORT for the web dashboard.
     env["OMNIBOT_NO_WEB"] = "1"
     py = sys.executable
     script = str(Path(__file__).resolve())
@@ -167,7 +202,6 @@ async def run() -> None:
         )
         sys.exit(1)
 
-    # Primary process: if both platforms requested, Discord stays here; GameVox is a child.
     gamevox_proc: subprocess.Popen | None = None
     if run_discord and run_gamevox and not is_worker:
         gamevox_proc = _spawn_gamevox_worker()
@@ -189,11 +223,13 @@ async def run() -> None:
         sys.exit(1)
 
     log.info(
-        "[Startup] projectRoot=%s platform=%s role=%s web=%s",
+        "[Startup] projectRoot=%s platform=%s role=%s web=%s targets discord=%s gamevox_child=%s",
         _PROJECT_ROOT,
         platform,
         _ROLE,
         "off" if no_web else "on",
+        run_discord or platform == PLATFORM_DISCORD,
+        gamevox_proc is not None,
     )
 
     bot = OmniBot()
@@ -233,8 +269,6 @@ async def run() -> None:
     )
     log.info("[Startup] image=%s", "ready" if settings.home_mode_api_url else "not-configured")
 
-    # Wait until the *primary* bot or web dies. GameVox watcher never finishes on its own.
-    # Prefer FIRST_COMPLETED on bot+web only so GameVox exit doesn't stop Discord.
     critical = {t for t in tasks if t.get_name() != "gamevox-watch"}
     done, pending = await asyncio.wait(critical, return_when=asyncio.FIRST_EXCEPTION)
     for t in pending:
