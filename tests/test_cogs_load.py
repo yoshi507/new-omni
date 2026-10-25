@@ -45,3 +45,18 @@ def test_social_normalise():
             continue
         raise AssertionError(bad)
     assert discord  # keep import used
+
+
+def test_gamevox_partial_app_info_does_not_crash():
+    from omnibot.bot import _complete_app_info
+
+    bot = OmniBot()
+    # GameVox-style payload: no owner / verify_key / bot flags
+    data = _complete_app_info({"id": "42", "name": "Omni"}, None)
+    info = discord.AppInfo(bot._connection, data)
+    assert info.id == 42 and info.owner is not None
+    # Discord-style full payload is left untouched
+    full = {"id": "1", "name": "n", "description": "d", "icon": None, "bot_public": True,
+            "bot_require_code_grant": False, "verify_key": "k",
+            "owner": {"id": "9", "username": "me", "discriminator": "0", "avatar": None}}
+    assert _complete_app_info(full, None) == full

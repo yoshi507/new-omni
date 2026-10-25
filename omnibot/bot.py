@@ -33,6 +33,35 @@ def _prefix(bot: commands.Bot, message: discord.Message):
     return commands.when_mentioned(bot, message)
 
 
+def _complete_app_info(data: dict | None, user: discord.ClientUser | None) -> dict:
+    """Fill fields some Discord-compatible platforms (GameVox) leave out of
+    /oauth2/applications/@me, so discord.py's AppInfo doesn't KeyError on login."""
+    data = dict(data or {})
+    uid = str(user.id) if user else str(data.get("id") or "0")
+    uname = user.name if user else "OmniBot"
+    data.setdefault("id", uid)
+    data.setdefault("name", uname)
+    data.setdefault("description", "")
+    data.setdefault("icon", None)
+    data.setdefault("bot_public", False)
+    data.setdefault("bot_require_code_grant", False)
+    data.setdefault("verify_key", "")
+    owner = data.get("owner")
+    if not isinstance(owner, dict) or "id" not in owner:
+        data["owner"] = {
+            "id": uid,
+            "username": uname,
+            "discriminator": "0",
+            "avatar": user.avatar.key if user and user.avatar else None,
+            "global_name": None,
+        }
+    else:
+        owner.setdefault("username", "owner")
+        owner.setdefault("discriminator", "0")
+        owner.setdefault("avatar", None)
+    return data
+
+
 class OmniBot(commands.Bot):
     def __init__(self) -> None:
         super().__init__(
@@ -48,6 +77,20 @@ class OmniBot(commands.Bot):
         )
         self.deploy_marker = DEPLOY_MARKER
         self.platform = getattr(settings, "platform", "discord")
+
+    async def application_info(self) -> discord.AppInfo:
+        """Tolerant version: works on Discord and on GameVox's partial payload."""
+        try:
+            data = await self.http.application_info()
+        except discord.HTTPException as e:
+            if self.platform == "discord":
+                raise
+            log.warning("application_info failed on %s (%s) — using bot user as app info", self.platform, e)
+            data = {}
+        missing = [k for k in ("owner", "verify_key", "bot_public", "description") if k not in (data or {})]
+        if missing:
+            log.info("App info missing %s on %s — filled defaults", ", ".join(missing), self.platform)
+        return discord.AppInfo(self._connection, _complete_app_info(data, self.user))
 
     async def setup_hook(self) -> None:
         cogs_dir = Path(__file__).parent / "cogs"
