@@ -8,7 +8,7 @@ Discord limits **100 global slash commands**. OmniBot uses **command groups**, *
 - ❌ Explicitly out of scope (per request)
 
 ## Implemented
-1. Core — slash, prefix, buttons, cooldowns, permissions, per-server JSON, help, dashboard, OAuth, presence ✅
+1. Core — slash, buttons, cooldowns, permissions, per-server JSON, help, dashboard, OAuth, presence ✅
 2–4. Moderation / Logging / Security — kick ban timeout warn purge lock slowmode automod anti-spam anti-nuke logging honeypot ✅
 5. Welcome / goodbye / autorole / verification button gate ✅
 6. Tickets open/claim/close ✅
@@ -32,21 +32,21 @@ Discord limits **100 global slash commands**. OmniBot uses **command groups**, *
 34–36. Advertise board ✅
 37. Fun suite ✅
 38. Automation keyword triggers + custom prefix commands ✅
-41. Config backup export snapshots ✅
+39. Social notifications — YouTube uploads, Reddit posts, Twitch go-live (polled every 5 min) ✅
+41. Config backup export (file) / restore / snapshots ✅
 43. Health `/health` `/version` ✅
 44. Dashboard multi-section + AI personality ✅
 
 ## Explicitly excluded (user request)
 - ❌ Global cross-server economy
 - ❌ Self-hosted / local LLM
-- ❌ Social notifications (Twitch/TikTok/YouTube live)
 - ❌ Premium / Stripe billing
 - ❌ Tebex shop integration
 - ❌ Minecraft / FiveM status embeds
 
 ## Slash command strategy
 Groups: `/game`, `/engage`, `/invite`, `/verify`, `/music`, `/roles`, `/util`, `/level`, `/auto`, `/backup`, …
-Secondary actions use **prefix** (`!afk`, custom commands) or **dashboard toggles**.
+Secondary actions use **dashboard toggles** (OmniBot is slash-only; AI responds to @mentions).
 
 ## External APIs (when available)
 NASA DEMO_KEY, CoinGecko, open-er-api, wttr.in, Wikipedia, Urban Dictionary, GitHub, dictionaryapi, MyMemory, meme-api, dog.ceo, thecatapi

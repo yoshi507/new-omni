@@ -1,6 +1,7 @@
 """Advanced anti-nuke: monitor mass channel/role/ban/kick/webhook actions with alert or lockdown."""
 from __future__ import annotations
 
+import logging
 import time
 from collections import defaultdict
 
@@ -9,6 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 class Security(commands.Cog):
@@ -49,7 +52,7 @@ class Security(commands.Cog):
                     emb.add_field(name="Mode", value=mode)
                     await ch.send(embed=emb)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
         if mode == "lockdown":
             try:
                 for ch in guild.text_channels:
@@ -60,7 +63,7 @@ class Security(commands.Cog):
                     except Exception:
                         continue
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     async def _check(self, guild: discord.Guild, kind: str, label: str):
         data = storage.load_guild(guild.id)

@@ -51,9 +51,12 @@ if [[ -z "${PY}" ]]; then
 fi
 
 if [[ -f requirements.txt ]]; then
-  "${PY}" -m pip install -U --prefix .local -r requirements.txt 2>/dev/null \
-    || "${PY}" -m pip install -U -r requirements.txt 2>/dev/null \
-    || true
+  if ! "${PY}" -m pip install -U --prefix .local -r requirements.txt; then
+    echo "[start.sh] --prefix install failed, retrying a normal install…"
+    if ! "${PY}" -m pip install -U -r requirements.txt; then
+      echo "[start.sh] WARNING: pip install failed — see errors above. Starting anyway with whatever is installed."
+    fi
+  fi
   for sp in "${ROOT}"/.local/lib/python*/site-packages; do
     [[ -d "${sp}" ]] && export PYTHONPATH="${sp}:${PYTHONPATH}"
   done

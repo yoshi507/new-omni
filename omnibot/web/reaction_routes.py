@@ -28,6 +28,8 @@ def register_reaction_routes(app, assert_guild_access):
         g = b.get_guild(int(guild_id))
         if not g:
             raise HTTPException(400, "Bot not in guild")
+        if not str(body.channel_id).isdigit():
+            raise HTTPException(400, "Invalid channel id")
         ch = g.get_channel(int(body.channel_id))
         if not isinstance(ch, _discord.TextChannel):
             raise HTTPException(400, "Channel not found")
@@ -35,10 +37,15 @@ def register_reaction_routes(app, assert_guild_access):
         for p in (body.pairs or [])[:10]:
             em = str(p.get("emoji") or "").strip()
             rid = str(p.get("role_id") or "").strip()
-            if em and rid:
+            if em and rid.isdigit():
                 role = g.get_role(int(rid))
-                if role:
-                    pairs.append((em, role))
+                if role is None:
+                    continue
+                if role.managed or role.is_default() or role >= g.me.top_role:
+                    raise HTTPException(
+                        400, f"I can't assign @{role.name} — move my role above it (and don't use bot/managed roles)."
+                    )
+                pairs.append((em, role))
         if not pairs:
             raise HTTPException(400, "Add at least one emoji + role pair")
         lines = [f"{em} — {ro.mention}" for em, ro in pairs]
@@ -49,7 +56,10 @@ def register_reaction_routes(app, assert_guild_access):
             color=0x5B6CFF,
         )
         emb.set_footer(text="React to get or remove a role · OmniBot")
-        msg = await ch.send(embed=emb)
+        try:
+            msg = await ch.send(embed=emb)
+        except _discord.Forbidden:
+            raise HTTPException(403, "I can't send messages in that channel")
         failed = []
         for em, _ in pairs:
             try:

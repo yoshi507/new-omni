@@ -1,6 +1,7 @@
 """Guild events: welcome, goodbye, autorole, leveling, automod, mention AI, deadchat."""
 from __future__ import annotations
 
+import logging
 import random
 import re
 import time
@@ -12,6 +13,8 @@ from discord.ext import commands, tasks
 from omnibot import storage
 from omnibot.services import groq_client
 from omnibot.services.question_packs import pick_question
+
+_log = logging.getLogger(__name__)
 
 
 class Events(commands.Cog):
@@ -35,7 +38,7 @@ class Events(commands.Cog):
                 try:
                     await member.add_roles(role, reason="OmniBot autorole")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
         ws = data.get("welcomeSettings") or {}
         if ws.get("enabled") and ws.get("channelId"):
             ch = member.guild.get_channel(int(ws["channelId"]))
@@ -49,7 +52,7 @@ class Events(commands.Cog):
                 try:
                     await ch.send(msg)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
@@ -67,7 +70,7 @@ class Events(commands.Cog):
                 try:
                     await ch.send(msg)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
     @tasks.loop(minutes=2)
     async def deadchat_loop(self):
@@ -92,8 +95,8 @@ class Events(commands.Cog):
                     key = str(ch.id)
                     last = float(last_map.get(key) or 0)
                     if last <= 0:
-                        def mut_seed(d, k=key):
-                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[k] = now
+                        def mut_seed(d, k=key, ts=now):
+                            d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[k] = ts
                         storage.update_guild(guild.id, mut_seed)
                         continue
                     if now - last < minutes * 60:
@@ -106,7 +109,7 @@ class Events(commands.Cog):
                     try:
                         await ch.send(f"💬 **Dead chat reviver**\n{q}")
                     except Exception:
-                        pass
+                        _log.debug("Ignored error", exc_info=True)
                     def mut_reset(d, k=key):
                         d.setdefault("deadChat", {}).setdefault("lastMessageAt", {})[k] = time.time()
                     storage.update_guild(guild.id, mut_reset)
@@ -192,7 +195,7 @@ class Events(commands.Cog):
                         delete_after=8,
                     )
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 return
 
         try:
@@ -204,14 +207,14 @@ class Events(commands.Cog):
             try:
                 await message.delete()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             try:
                 await message.channel.send(
                     f"{message.author.mention} message removed (**smart automod**): {reason}",
                     delete_after=10,
                 )
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             action = str(sm.get("action") or "delete")
             if action == "timeout" and isinstance(message.author, discord.Member):
                 try:
@@ -219,7 +222,7 @@ class Events(commands.Cog):
                     mins = int(sm.get("timeoutMinutes") or 5)
                     await message.author.timeout(timedelta(minutes=mins), reason=f"Smart automod: {reason}")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
             return
 
         spam = data.get("spamConfig") or {}
@@ -239,7 +242,7 @@ class Events(commands.Cog):
                         delete_after=6,
                     )
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 self._spam[key] = []
                 return
 
@@ -273,7 +276,7 @@ class Events(commands.Cog):
                             f"🎉 {message.author.mention} reached level **{leveled_to}**!"
                         )
                     except Exception:
-                        pass
+                        _log.debug("Ignored error", exc_info=True)
 
         if not message.content:
             return
@@ -293,7 +296,7 @@ class Events(commands.Cog):
                     f"❌ {text}" if not ok else text[:1900], mention_author=False
                 )
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
 
 async def setup(bot: commands.Bot):

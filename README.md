@@ -66,7 +66,8 @@ Set at least (panel Variables or `.env`):
 | `DISCORD_CLIENT_ID` | Dashboard |
 | `DISCORD_CLIENT_SECRET` | Dashboard |
 | `PUBLIC_BASE_URL` | Dashboard OAuth |
-| `SESSION_SECRET` | Dashboard sessions |
+| `SESSION_SECRET` | Encrypts stored dashboard sessions (auto-generated in `data/` if empty) |
+| `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` | Twitch go-live notifications (optional) |
 | `GROQ_API_KEY` | AI features |
 | `PORT` | Usually injected by panel |
 
@@ -85,4 +86,17 @@ See `.env.example` for the full list.
 
 ## Feature overview
 
-Slash groups + prefix + natural AI · moderation · tickets · economy · games · music (yt-dlp) · voice TTS with character voices · dashboard toggles · and more. See `FEATURES.md`.
+Slash-only commands + @mention AI · social notifications (YouTube / Reddit / Twitch) · moderation · tickets · economy · games · music (yt-dlp) · voice TTS with character voices · dashboard toggles · and more. See `FEATURES.md`.
+
+## Development
+
+```bash
+pip install -r requirements.txt ruff pytest
+ruff check .
+pytest -q
+```
+
+CI runs both on every push and pull request. `tests/test_cogs_load.py` loads every cog,
+so a duplicate command name or import error fails CI instead of silently dropping a cog in production.
+
+Slash commands are only re-synced with Discord when they change. Set `FORCE_COMMAND_SYNC=1` to force it.

@@ -1,11 +1,15 @@
 """Comprehensive server logging."""
 from __future__ import annotations
 
+import logging
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 def _log_channel(guild: discord.Guild) -> discord.TextChannel | None:
@@ -25,7 +29,7 @@ async def _send_log(guild: discord.Guild, title: str, description: str, color: i
     try:
         await ch.send(embed=emb)
     except Exception:
-        pass
+        _log.debug("Ignored error", exc_info=True)
 
 
 class LoggingCog(commands.Cog):

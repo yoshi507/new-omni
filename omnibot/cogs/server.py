@@ -73,46 +73,6 @@ class Server(commands.Cog):
         storage.update_guild(interaction.guild.id, mut)  # type: ignore
         await interaction.response.send_message("Autorole updated.", ephemeral=True)
 
-    @app_commands.command(name="deadchat", description="Configure Dead Chat Reviver")
-    @app_commands.default_permissions(administrator=True)
-    async def deadchat(
-        self,
-        interaction: discord.Interaction,
-        enabled: bool | None = None,
-        minutes: app_commands.Range[int, 5, 1440] | None = None,
-        channel: discord.TextChannel | None = None,
-    ):
-        def mut(d):
-            dc = d.setdefault("deadChat", {})
-            if enabled is not None:
-                dc["enabled"] = enabled
-            if minutes is not None:
-                dc["minutes"] = minutes
-            if channel is not None:
-                dc["channelId"] = str(channel.id)
-
-        storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message("Dead Chat settings updated.", ephemeral=True)
-
-    @app_commands.command(name="logging", description="Set mod/log channel")
-    @app_commands.default_permissions(administrator=True)
-    async def logging_cmd(
-        self,
-        interaction: discord.Interaction,
-        enabled: bool | None = None,
-        channel: discord.TextChannel | None = None,
-    ):
-        def mut(d):
-            lg = d.setdefault("logging", {})
-            if enabled is not None:
-                lg["enabled"] = enabled
-            if channel is not None:
-                lg["channelId"] = str(channel.id)
-                d.setdefault("settings", {})["modLogChannel"] = str(channel.id)
-
-        storage.update_guild(interaction.guild.id, mut)  # type: ignore
-        await interaction.response.send_message("Logging updated.", ephemeral=True)
-
     @app_commands.command(name="rank", description="Show your level")
     async def rank(self, interaction: discord.Interaction, member: discord.Member | None = None):
         member = member or interaction.user  # type: ignore

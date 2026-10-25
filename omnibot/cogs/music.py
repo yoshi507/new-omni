@@ -11,6 +11,8 @@ from discord.ext import commands
 
 from omnibot.services import concurrency
 
+_log = logging.getLogger(__name__)
+
 log = logging.getLogger("omnibot.music")
 _executor = ThreadPoolExecutor(max_workers=2)
 
@@ -106,7 +108,7 @@ class Music(commands.Cog):
             try:
                 fut.result(timeout=5)
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
         return _cb
 
@@ -207,7 +209,7 @@ class Music(commands.Cog):
             try:
                 await gp.voice.disconnect()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             gp.voice = None
         gp.current = None
         await interaction.response.send_message("Stopped.")

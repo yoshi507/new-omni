@@ -5,8 +5,7 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel
 
 from omnibot import storage
-
-ALLOWED = {"youtube", "twitch", "twitter", "x", "tiktok", "instagram", "reddit"}
+from omnibot.services import social_feeds
 
 
 class SocialFeedBody(BaseModel):
@@ -29,12 +28,10 @@ def register_social_routes(app, assert_guild_access):
     @app.post("/guilds/{guild_id}/social/feeds")
     async def add_social_feed(guild_id: str, body: SocialFeedBody, request: Request):
         await assert_guild_access(request, guild_id)
-        platform = (body.platform or "").lower().strip()
-        handle = (body.handle or "").strip()[:80]
-        if platform not in ALLOWED:
-            raise HTTPException(400, f"Platform must be one of: {', '.join(sorted(ALLOWED))}")
-        if not handle:
-            raise HTTPException(400, "Handle is required")
+        try:
+            platform, handle = social_feeds.normalise(body.platform, body.handle)
+        except social_feeds.FeedError as e:
+            raise HTTPException(400, str(e))
 
         def mut(d):
             s = d.setdefault("social", {})
@@ -43,7 +40,7 @@ def register_social_routes(app, assert_guild_access):
                 if str(f.get("platform", "")).lower() == platform and str(f.get("handle", "")).lower() == handle.lower():
                     return
             feeds.append({"platform": platform, "handle": handle})
-            s["feeds"] = feeds[-30:]
+            s["feeds"] = feeds[-20:]
 
         storage.update_guild(guild_id, mut)
         data = storage.load_guild(guild_id)

@@ -1,8 +1,6 @@
 """Information commands — user, server, role, channel, avatar, botinfo."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import discord
 from discord import app_commands
 from discord.ext import commands

@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 import httpx
 
 from omnibot.config import settings
 from omnibot.services import ai_limits
+
+_log = logging.getLogger(__name__)
 
 log = logging.getLogger("omnibot.image")
 _lock = asyncio.Lock()
@@ -53,7 +54,7 @@ async def generate(guild_id: int | str, prompt: str) -> tuple[bool, bytes | str]
                         ai_limits.consume(guild_id)
                         return True, ir.content
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             return False, "Image API returned an unexpected response."
         except httpx.RequestError as e:
             log.error("Image API unreachable: %s", e)

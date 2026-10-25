@@ -12,6 +12,8 @@ from discord.ext import commands
 from omnibot import storage
 from omnibot.services import ai_limits, concurrency, groq_client, tts
 
+_log = logging.getLogger(__name__)
+
 log = logging.getLogger("omnibot.voice")
 
 
@@ -88,7 +90,7 @@ class VoiceExtra(commands.Cog):
             try:
                 await existing.disconnect()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             await interaction.response.send_message("Left voice.", ephemeral=True)
             return
         await interaction.response.send_message("Not connected.", ephemeral=True)
@@ -165,14 +167,14 @@ class VoiceExtra(commands.Cog):
                     try:
                         audio_path.unlink(missing_ok=True)
                     except Exception:
-                        pass
+                        _log.debug("Ignored error", exc_info=True)
                 return await interaction.followup.send(f"❌ Could not join voice: {e}")
             if not vc:
                 if audio_path:
                     try:
                         audio_path.unlink(missing_ok=True)
                     except Exception:
-                        pass
+                        _log.debug("Ignored error", exc_info=True)
                 return await interaction.followup.send("Join a voice channel first.")
 
             if vc.is_playing() or vc.is_paused():
@@ -189,7 +191,7 @@ class VoiceExtra(commands.Cog):
                     if audio_path:
                         audio_path.unlink(missing_ok=True)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
             vc.play(source, after=_after)
             ai_limits.consume(gid)
@@ -240,13 +242,13 @@ class VoiceExtra(commands.Cog):
                 self.temp_channels.add(ch.id)
                 await member.move_to(ch)
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
         if before.channel and before.channel.id in self.temp_channels:
             if len(before.channel.members) == 0:
                 try:
                     await before.channel.delete(reason="Temp voice empty")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 self.temp_channels.discard(before.channel.id)
 
 

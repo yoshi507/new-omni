@@ -1,17 +1,16 @@
 """Feature hub: polls, quotes, colour roles, booster roles, autoname, embed builder."""
 from __future__ import annotations
 
-import json
+import logging
 import random
-import re
-import time
-from datetime import datetime, timezone
 
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 def _parse_color(s: str | None, default: int = 0x5B6CFF) -> int:
@@ -64,7 +63,7 @@ class FeaturesHub(commands.Cog):
             try:
                 await msg.add_reaction(emojis[i])
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     quote_g = app_commands.Group(name="quote", description="Message quotes")
 
@@ -132,7 +131,7 @@ class FeaturesHub(commands.Cog):
                 try:
                     await me.remove_roles(r, reason="Colour role swap")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
         try:
             await me.add_roles(role, reason="Colour role")
         except Exception as e:
@@ -151,7 +150,7 @@ class FeaturesHub(commands.Cog):
                     await me.remove_roles(r, reason="Colour clear")
                     removed += 1
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
         await interaction.response.send_message(f"Cleared {removed} colour role(s).", ephemeral=True)
 
     boost = app_commands.Group(name="boostrole", description="Roles for server boosters")
@@ -184,7 +183,7 @@ class FeaturesHub(commands.Cog):
             elif before.premium_since and not after.premium_since:
                 await after.remove_roles(role, reason="Boost ended")
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
     autoname = app_commands.Group(name="autoname", description="Auto-nickname new members")
 
@@ -218,7 +217,7 @@ class FeaturesHub(commands.Cog):
         try:
             await member.edit(nick=nick, reason="Auto-name")
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
     embed_g = app_commands.Group(name="embed", description="Build and send embeds")
 

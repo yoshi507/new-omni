@@ -67,9 +67,10 @@ _PROJECT_ROOT = _bootstrap_path()
 
 import uvicorn
 
-from omnibot.config import settings
-from omnibot.platform import configure_platform, resolve_bot_token, PLATFORM_GAMEVOX
+from omnibot import DEPLOY_MARKER
 from omnibot.bot import OmniBot
+from omnibot.config import settings
+from omnibot.platform import PLATFORM_GAMEVOX, configure_platform, resolve_bot_token
 from omnibot.web.app import create_app
 
 logging.basicConfig(
@@ -78,8 +79,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("omnibot")
-
-DEPLOY_MARKER = "2026-10-22-gamevox-v1"
 
 
 async def run() -> None:
@@ -100,7 +99,6 @@ async def run() -> None:
     log.info("[Startup] projectRoot=%s platform=%s", _PROJECT_ROOT, platform)
 
     bot = OmniBot()
-    bot.deploy_marker = DEPLOY_MARKER
     bot.platform = platform  # type: ignore[attr-defined]
     app = create_app(bot=bot, deploy_marker=DEPLOY_MARKER)
 
@@ -110,6 +108,8 @@ async def run() -> None:
         port=settings.port,
         log_level="info",
         access_log=False,
+        ssl_keyfile=settings.ssl_key_path or None,
+        ssl_certfile=settings.ssl_cert_path or None,
     )
     server = uvicorn.Server(config)
 

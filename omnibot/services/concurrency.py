@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+
+_log = logging.getLogger(__name__)
 
 GLOBAL_MAX = 10
 PER_GUILD_MAX = 1
@@ -104,7 +107,7 @@ def release(guild_id: int | str | None) -> None:
     try:
         _held.set(False)
     except Exception:
-        pass
+        _log.debug("Ignored error", exc_info=True)
     key = str(guild_id)
     gsem = _guild_sems.get(key)
     glob = _global_sem

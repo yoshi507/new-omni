@@ -1,8 +1,8 @@
 """Starboard, sticky roles, invites, counting, word-chain, AFK, verification, honeypot, boosters."""
 from __future__ import annotations
 
+import logging
 import re
-import time
 from collections import defaultdict
 
 import discord
@@ -10,6 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 async def post_honeypot_warning(channel: discord.TextChannel) -> discord.Message | None:
@@ -40,7 +42,7 @@ async def delete_honeypot_warning(guild: discord.Guild, data: dict) -> None:
         msg = await ch.fetch_message(int(msg_id))
         await msg.delete()
     except Exception:
-        pass
+        _log.debug("Ignored error", exc_info=True)
 
 
 class EngagementExtra(commands.Cog):
@@ -167,7 +169,7 @@ class EngagementExtra(commands.Cog):
 
             storage.update_guild(payload.guild_id, mut)
         except Exception:
-            pass
+            _log.debug("Ignored error", exc_info=True)
 
     @engage.command(name="sticky-toggle", description="Restore roles when members rejoin")
     @app_commands.checks.has_permissions(manage_roles=True)
@@ -202,7 +204,7 @@ class EngagementExtra(commands.Cog):
                 try:
                     await member.add_roles(*roles, reason="Sticky roles restore")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
         guild = member.guild
         try:
             invs = await guild.invites()
@@ -258,7 +260,7 @@ class EngagementExtra(commands.Cog):
                 invs = await g.invites()
                 self._invite_cache[g.id] = {i.code: i.uses or 0 for i in invs}
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite: discord.Invite):
@@ -327,7 +329,7 @@ class EngagementExtra(commands.Cog):
                     old_msg = await old_ch.fetch_message(int(old["messageId"]))
                     await old_msg.delete()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
         view = discord.ui.View(timeout=None)
         view.add_item(
@@ -410,7 +412,7 @@ class EngagementExtra(commands.Cog):
 
             storage.update_guild(interaction.guild.id, mut_off)
             await interaction.response.send_message(
-                f"Honeypot **disabled**. Warning message removed if it was still there.",
+                "Honeypot **disabled**. Warning message removed if it was still there.",
                 ephemeral=True,
             )
             return
@@ -471,7 +473,7 @@ class EngagementExtra(commands.Cog):
                 try:
                     await ch.send(msg)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -488,7 +490,7 @@ class EngagementExtra(commands.Cog):
                     f"Welcome back {message.author.mention} — AFK removed.", delete_after=8
                 )
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
         for m in message.mentions:
             reason = self._afk.get(gid, {}).get(m.id)
             if reason:
@@ -497,7 +499,7 @@ class EngagementExtra(commands.Cog):
                         f"{m.display_name} is AFK: {reason}", delete_after=12
                     )
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
 
         hp = data.get("honeypot") or {}
         if hp.get("enabled") and str(cid) == str(hp.get("channelId")):
@@ -513,11 +515,11 @@ class EngagementExtra(commands.Cog):
                 try:
                     await message.author.kick(reason="Honeypot channel")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
             try:
                 await message.delete()
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             return
 
         cnt = data.get("counting") or {}
@@ -546,14 +548,14 @@ class EngagementExtra(commands.Cog):
                 try:
                     await message.add_reaction("❌")
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 try:
                     await message.channel.send(
                         f"💥 {message.author.mention} ruined the count ({fail_reason})! "
                         f"Back to **1** — someone else start again."
                     )
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 return
 
             def mut_ok(d):
@@ -565,7 +567,7 @@ class EngagementExtra(commands.Cog):
             try:
                 await message.add_reaction("✅")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
             return
 
         wc = data.get("wordchain") or {}
@@ -576,7 +578,7 @@ class EngagementExtra(commands.Cog):
                 try:
                     await message.delete()
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 return
             last = (wc.get("lastWord") or "").lower()
             last_user = wc.get("lastUser")
@@ -586,7 +588,7 @@ class EngagementExtra(commands.Cog):
                 try:
                     await message.delete()
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 return
 
             def mut(d):

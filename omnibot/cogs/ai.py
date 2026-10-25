@@ -7,8 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from omnibot import storage
-from omnibot.services import groq_client, ai_limits, image_gen
+from omnibot.services import groq_client, image_gen
 
 
 class AI(commands.Cog):

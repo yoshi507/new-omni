@@ -1,10 +1,14 @@
 """Translation commands — MyMemory API (no AI quota)."""
 from __future__ import annotations
 
+import logging
+
 import discord
+import httpx
 from discord import app_commands
 from discord.ext import commands
-import httpx
+
+_log = logging.getLogger(__name__)
 
 LANG_HINT = "en, es, fr, de, it, pt, ru, ja, ko, zh, ar, hi, nl, pl, tr, sv, uk"
 
@@ -43,7 +47,7 @@ class Translate(commands.Cog):
                         if matches and isinstance(matches[0], dict):
                             detected = matches[0].get("source") or source
                     except Exception:
-                        pass
+                        _log.debug("Ignored error", exc_info=True)
                     return translated, str(detected or source)
         except Exception as e:
             return None, str(e)

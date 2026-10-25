@@ -3,15 +3,20 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import random
 import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
 import discord
+import httpx
 from discord import app_commands
 from discord.ext import commands
-import httpx
+
+from omnibot.services import safe_math
+
+_log = logging.getLogger(__name__)
 
 
 class Utilities(commands.Cog):
@@ -24,16 +29,14 @@ class Utilities(commands.Cog):
     async def ping(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"Pong · `{round(self.bot.latency * 1000)}ms`")
 
-    @util.command(name="calc", description="Simple calculator (+ - * /)")
+    @util.command(name="calc", description="Calculator (+ - * / // % ** and brackets)")
     async def calc(self, interaction: discord.Interaction, expression: str):
-        allowed = set("0123456789+-*/().% ")
-        if not set(expression) <= allowed:
-            return await interaction.response.send_message("Only numbers and + - * / ( ) allowed.", ephemeral=True)
         try:
-            result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307 — restricted
-            await interaction.response.send_message(f"`{expression}` = **{result}**")
-        except Exception:
-            await interaction.response.send_message("Could not evaluate.", ephemeral=True)
+            result = safe_math.evaluate(expression)
+        except safe_math.CalcError as e:
+            return await interaction.response.send_message(str(e), ephemeral=True)
+        shown = discord.utils.escape_markdown(expression[:200])
+        await interaction.response.send_message(f"`{shown}` = **{result}**")
 
     @util.command(name="weather", description="Weather by city (wttr.in)")
     async def weather(self, interaction: discord.Interaction, city: str):
@@ -63,7 +66,7 @@ class Utilities(commands.Cog):
             try:
                 await interaction.user.send(f"⏰ Reminder: {text[:500]}")
             except Exception:
-                pass
+                _log.debug("Ignored error", exc_info=True)
 
     @util.command(name="poll", description="Create a quick yes/no or multi poll")
     async def poll(self, interaction: discord.Interaction, question: str, option_a: str = "Yes", option_b: str = "No", option_c: str | None = None):

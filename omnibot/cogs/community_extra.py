@@ -1,9 +1,6 @@
 """Suggestions, birthdays, announcements, levels, profiles."""
 from __future__ import annotations
 
-import time
-from datetime import datetime
-
 import discord
 from discord import app_commands
 from discord.ext import commands

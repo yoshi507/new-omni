@@ -1,13 +1,15 @@
 """Keyword triggers, scheduled messages, custom commands (slash only)."""
 from __future__ import annotations
 
-import time
+import logging
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from omnibot import storage
+
+_log = logging.getLogger(__name__)
 
 
 class Automation(commands.Cog):
@@ -103,7 +105,7 @@ class Automation(commands.Cog):
                 try:
                     await message.channel.send(resp)
                 except Exception:
-                    pass
+                    _log.debug("Ignored error", exc_info=True)
                 break
 
 

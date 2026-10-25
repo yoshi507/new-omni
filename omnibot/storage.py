@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from copy import deepcopy
+import time
 from pathlib import Path
 from typing import Any
 
@@ -23,27 +23,39 @@ def _default_guild() -> dict[str, Any]:
     return get_defaults_nested()
 
 
+def _quarantine(path: Path, reason: Exception) -> None:
+    """Move an unreadable file aside so the next save can't destroy it."""
+    dest = path.with_name(f"{path.stem}.corrupt-{int(time.time())}.json")
+    try:
+        path.replace(dest)
+        log.error("Guild file %s was unreadable (%s) — moved to %s", path.name, reason, dest.name)
+    except OSError as e:
+        log.error("Guild file %s unreadable (%s) and could not be moved: %s", path.name, reason, e)
+
+
 def load_guild(guild_id: int | str) -> dict[str, Any]:
+    """Return the guild's data merged with defaults. Never writes to disk."""
     path = _guild_path(guild_id)
     with _lock:
         if not path.exists():
-            data = _default_guild()
-            _write_unlocked(path, data)
-            return deepcopy(data)
+            return _default_guild()
         try:
             with path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
-                data = _default_guild()
-            # merge missing defaults shallowly at top keys
-            base = _default_guild()
-            for k, v in base.items():
-                if k not in data:
-                    data[k] = v
-            return data
-        except Exception as e:
-            log.warning("Failed to load guild %s: %s", guild_id, e)
+                raise ValueError("top-level JSON is not an object")
+        except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
+            _quarantine(path, e)
             return _default_guild()
+        except OSError as e:
+            # Transient read error: don't quarantine, but refuse to let a save clobber it.
+            log.warning("Failed to read guild %s: %s", guild_id, e)
+            raise
+        base = _default_guild()
+        for k, v in base.items():
+            if k not in data:
+                data[k] = v
+        return data
 
 
 def save_guild(guild_id: int | str, data: dict[str, Any]) -> bool:

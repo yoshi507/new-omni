@@ -2,27 +2,31 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from omnibot.config import settings
 from omnibot import storage
-from omnibot.settings_registry import SETTINGS, get_setting_by_id, validate_setting, get_defaults_flat
-from omnibot.web import sessions, oauth
-from omnibot.services import ai_limits
-from omnibot.web.social_routes import register_social_routes
+from omnibot.config import settings
+from omnibot.settings_registry import (
+    SETTINGS,
+    get_defaults_flat,
+    get_setting_by_id,
+    validate_setting,
+)
+from omnibot.web import oauth, sessions
 from omnibot.web.reaction_routes import register_reaction_routes
+from omnibot.web.social_routes import register_social_routes
 
 log = logging.getLogger("omnibot.web")
 PUBLIC_DIR = Path(__file__).resolve().parent.parent.parent / "public" / "dashboard"
 COOKIE = "omnibot_session"
+STATE_COOKIE = "omnibot_oauth_state"
 
 class SettingsPatch(BaseModel):
     patch: dict[str, Any]
@@ -31,7 +35,14 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
     app = FastAPI(title="OmniBot API", docs_url=None, redoc_url=None)
     app.state.bot = bot
     app.state.deploy_marker = deploy_marker
-    app.add_middleware(CORSMiddleware, allow_origins=settings.dashboard_origins + ["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+    # Only our own dashboard origins may make credentialed requests (no "*").
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.dashboard_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
 
     @app.middleware("http")
     async def strip_api_prefix(request: Request, call_next):
@@ -122,14 +133,23 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
     async def auth_login():
         if not settings.discord_client_id or not settings.discord_client_secret:
             raise HTTPException(503, "OAuth not configured (DISCORD_CLIENT_ID/SECRET)")
-        state = secrets.token_urlsafe(16)
-        url = f"https://discord.com/api/oauth2/authorize?client_id={settings.discord_client_id}&redirect_uri={settings.discord_redirect_uri}&response_type=code&scope=identify%20guilds&state={state}"
-        return RedirectResponse(url)
+        state = sessions.new_oauth_state()
+        resp = RedirectResponse(oauth.login_url(state))
+        # Bind the state to this browser so a forged callback can't log a victim in.
+        resp.set_cookie(STATE_COOKIE, state, **{**_cookie_kwargs(), "max_age": sessions.OAUTH_STATE_TTL})
+        return resp
 
     @app.get("/auth/discord/callback")
-    async def auth_callback(request: Request, code: str | None = None, error: str | None = None):
+    async def auth_callback(
+        request: Request, code: str | None = None, state: str | None = None, error: str | None = None
+    ):
         if error or not code:
             return RedirectResponse("/?error=oauth")
+        if not sessions.consume_oauth_state(state, request.cookies.get(STATE_COOKIE)):
+            log.warning("OAuth callback rejected: missing or invalid state")
+            resp = RedirectResponse("/?error=state")
+            resp.delete_cookie(STATE_COOKIE, path="/")
+            return resp
         try:
             token = await oauth.exchange_code(code)
             access = token["access_token"]
@@ -143,6 +163,7 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
                 log.warning("Prefetch guilds failed: %s", e)
             resp = RedirectResponse("/?logged_in=1")
             resp.set_cookie(COOKIE, sid, **_cookie_kwargs())
+            resp.delete_cookie(STATE_COOKIE, path="/")
             return resp
         except Exception as e:
             log.error("OAuth callback failed: %s", e)
@@ -259,13 +280,18 @@ def create_app(bot, deploy_marker: str) -> FastAPI:
         g = b.get_guild(int(guild_id))
         if not g:
             raise HTTPException(400, "Bot not in guild")
+        if not str(body.channel_id).isdigit():
+            raise HTTPException(400, "Invalid channel id")
         ch = g.get_channel(int(body.channel_id))
-        if ch is None:
-            raise HTTPException(400, "Channel not found")
+        if not isinstance(ch, _discord.TextChannel):
+            raise HTTPException(400, "Pick a text channel")
         view = _discord.ui.View(timeout=None)
         view.add_item(_discord.ui.Button(label="Open Ticket", style=_discord.ButtonStyle.primary, custom_id="omnibot:ticket:open"))
         emb = _discord.Embed(title=(body.title or "Support Tickets")[:256], description=(body.description or "Click to open a ticket.")[:4000], color=0x5B6CFF)
-        msg = await ch.send(embed=emb, view=view)
+        try:
+            msg = await ch.send(embed=emb, view=view)
+        except _discord.Forbidden:
+            raise HTTPException(403, "I can't send messages in that channel")
         def mut(d):
             t = d.setdefault("tickets", {})
             t["enabled"] = True
