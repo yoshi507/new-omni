@@ -24,11 +24,12 @@ PLATFORM_DISCORD = "discord"
 PLATFORM_GAMEVOX = "gamevox"
 
 GAMEVOX_REST_BASE = "https://app-api.gamevox.com/api/v10"
-GAMEVOX_GATEWAY = "wss://gateway.gamevox.com/?v=10&encoding=json"
+# Base URL only — discord.py adds ?v=10&encoding=json itself via yarl.URL.with_query().
+GAMEVOX_GATEWAY = "wss://gateway.gamevox.com/"
 
 # Official Discord defaults (for restore / logging)
 DISCORD_REST_BASE = "https://discord.com/api/v10"
-DISCORD_GATEWAY = "wss://gateway.discord.gg/?v=10&encoding=json"
+DISCORD_GATEWAY = "wss://gateway.discord.gg/"
 
 
 def resolve_platform() -> str:
@@ -44,30 +45,23 @@ def configure_platform(platform: str | None = None) -> str:
     Must run before OmniBot is constructed / started.
     Returns the resolved platform name.
     """
+    import yarl
     from discord.gateway import DiscordWebSocket
     from discord.http import Route
 
     plat = (platform or resolve_platform()).strip().lower()
     if plat in ("gamevox", "gv", "game-vox"):
         Route.BASE = GAMEVOX_REST_BASE
-        DiscordWebSocket.DEFAULT_GATEWAY = GAMEVOX_GATEWAY
-        # Some discord.py builds also read Client.http.api / connector paths later;
-        # Route.BASE is what official GameVox docs set.
-        log.info(
-            "Platform=GameVox · REST=%s · gateway=%s",
-            GAMEVOX_REST_BASE,
-            GAMEVOX_GATEWAY,
-        )
+        # Must be a yarl.URL: discord.py 2.7 calls DEFAULT_GATEWAY.with_query(...).
+        # (GameVox's docs show a plain string, which crashes on connect.)
+        DiscordWebSocket.DEFAULT_GATEWAY = yarl.URL(GAMEVOX_GATEWAY)
+        log.info("Platform=GameVox · REST=%s · gateway=%s", GAMEVOX_REST_BASE, GAMEVOX_GATEWAY)
         return PLATFORM_GAMEVOX
 
-    # Explicit Discord (or unknown → Discord)
+    # Discord: same values as discord.py's own defaults.
     Route.BASE = DISCORD_REST_BASE
-    # DEFAULT_GATEWAY may be a yarl.URL in some versions — only set string form
-    try:
-        DiscordWebSocket.DEFAULT_GATEWAY = DISCORD_GATEWAY
-    except Exception:
-        _log.debug("Ignored error", exc_info=True)
-    log.info("Platform=Discord · REST=%s", getattr(Route, "BASE", DISCORD_REST_BASE))
+    DiscordWebSocket.DEFAULT_GATEWAY = yarl.URL(DISCORD_GATEWAY)
+    log.info("Platform=Discord · REST=%s", Route.BASE)
     return PLATFORM_DISCORD
 
 

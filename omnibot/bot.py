@@ -1,6 +1,7 @@
 """discord.py bot client + cog loader."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -125,16 +126,71 @@ class OmniBot(commands.Bot):
                     return
             except OSError:
                 pass
+        ok = False
         try:
             synced = await self.tree.sync()
             log.info("Synced %s application command(s)", len(synced))
-            if digest:
-                try:
-                    marker.write_text(digest)
-                except OSError:
-                    log.warning("Could not write %s", marker)
+            ok = True
+        except discord.HTTPException as e:
+            log.error(
+                "Bulk slash sync failed (HTTP %s, code %s): %s",
+                e.status, e.code, (e.text or "")[:500] or "no details from server",
+            )
+            ok = await self._sync_one_by_one()
         except Exception:
             log.exception("Slash sync failed")
+        if ok and digest:
+            try:
+                marker.write_text(digest)
+            except OSError:
+                log.warning("Could not write %s", marker)
+
+    # Keys some Discord-compatible platforms may not accept yet.
+    _OPTIONAL_COMMAND_KEYS = (
+        "contexts", "integration_types", "nsfw", "name_localizations", "description_localizations",
+    )
+
+    async def _sync_one_by_one(self) -> bool:
+        """Fallback: upload each command separately so one bad command can't block the rest."""
+        app_id = self.application_id
+        if not app_id:
+            return False
+        good, skipped = 0, []
+        for cmd in self.tree.get_commands():
+            payload = cmd.to_dict(self.tree)
+            err = ""
+            for attempt in (payload, self._strip_optional(payload)):
+                try:
+                    await self.http.upsert_global_command(app_id, attempt)
+                    good += 1
+                    break
+                except discord.HTTPException as e:
+                    err = f"HTTP {e.status} {e.code}: {(e.text or '')[:200]}"
+            else:
+                skipped.append(f"/{payload.get('name')} ({err})")
+            await asyncio.sleep(0.3)  # be gentle with rate limits
+        log.info("Uploaded %s slash command(s) one by one", good)
+        for line in skipped:
+            log.warning("Skipped slash command %s", line)
+        return good > 0
+
+    @classmethod
+    def _strip_optional(cls, payload: dict) -> dict:
+        drop = cls._OPTIONAL_COMMAND_KEYS
+
+        def clean(opts):
+            res = []
+            for o in opts or []:
+                o = {k: v for k, v in o.items() if k not in drop}
+                if "options" in o:
+                    o["options"] = clean(o["options"])
+                res.append(o)
+            return res
+
+        out = {k: v for k, v in payload.items() if k not in drop}
+        if "options" in out:
+            out["options"] = clean(out["options"])
+        return out
 
     async def on_app_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
